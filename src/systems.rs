@@ -2,7 +2,40 @@ use bevy::prelude::*;
 use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
 use crate::components::*;
-use crate::utils::{get_card_front_image, get_card_back_image, can_place_on_card};
+use crate::utils::{get_card_front_image, get_card_back_image, can_place_on_card, has_complete_stack};
+
+// Helper function to create a card entity with sprite
+fn create_card_entity(
+    commands: &mut Commands,
+    asset_server: &Res<AssetServer>,
+    position: Vec3,
+    suit: CardSuit,
+    value: u8,
+    is_face_up: bool,
+    components: impl Bundle,
+) -> Entity {
+    let sprite_image = if is_face_up {
+        get_card_front_image(suit, value)
+    } else {
+        get_card_back_image(suit).to_string()
+    };
+    
+    commands.spawn((
+        Sprite {
+            image: asset_server.load(sprite_image),
+            custom_size: Some(Vec2::new(80.0, 120.0)),
+            ..default()
+        },
+        Transform::from_translation(position),
+        Card,
+        CardData {
+            suit,
+            value,
+            is_face_up,
+        },
+        components,
+    )).id()
+}
 
 
 pub fn stock_click_system(
@@ -34,47 +67,28 @@ pub fn stock_click_system(
                     let waste_y = stock_y;
                     
                     // Create card in waste pile with proper components
-                    let card_entity = commands.spawn((
-                        Sprite {
-                            image: asset_server.load(get_card_back_image(suit)),
-                            custom_size: Some(Vec2::new(80.0, 120.0)),
-                            ..default()
-                        },
-                        Transform::from_xyz(waste_x, waste_y, 10.0),
-                        Card,
-                        CardFront,
-                        CardData {
-                            suit,
-                            value,
-                            is_face_up: true,
-                        },
-                        Draggable, // Waste cards are draggable
-                        WastePile,
-                        OriginalPosition(Vec3::new(waste_x, waste_y, 10.0)),
-                    )).id();
-                                       
-                    // Add card front image
-                    commands.spawn((
-                        Sprite {
-                            image: asset_server.load(get_card_front_image(suit, value)),
-                            custom_size: Some(Vec2::new(50.0, 70.0)), // Much smaller for clear centering
-                            ..default()
-                        },
-                        Transform::from_xyz(0.0, -10.0, 1.0), // Positioned relative to card center
-                    )).set_parent_in_place(card_entity);
-                } else {
-                    // Stock is empty, recycle waste pile
-                    let mut waste_card_data = Vec::new();
+                    create_card_entity(
+                        &mut commands,
+                        &asset_server,
+                        Vec3::new(waste_x, waste_y, 10.0),
+                        suit,
+                        value,
+                        true,
+                        (
+                            Draggable, // Waste cards are draggable
+                            WastePile,
+                            OriginalPosition(Vec3::new(waste_x, waste_y, 10.0)),
+                        ),
+                    );
                     
-                    // Collect all waste cards and their data
-                    for (entity, card_data) in waste_cards.iter() {
-                        waste_card_data.push((card_data.suit, card_data.value));
-                        commands.entity(entity).despawn();
+                    // Mark all existing waste cards as skipped (they're no longer the top card)
+                    for (entity, _) in waste_cards.iter() {
+                        commands.entity(entity).insert(SkippedWasteCard);
+                        // Don't remove Draggable - we'll use SkippedWasteCard to prevent dragging instead
                     }
-                    
-                    // Reverse the waste cards and add them back to stock
-                    waste_card_data.reverse();
-                    stock_cards.0 = waste_card_data;
+                } else {
+                    // If stock is empty, do nothing - stock remains empty
+                    // No recycling from waste pile in standard Solitaire
                 }
             }
         }
@@ -148,7 +162,7 @@ pub fn card_movement_system(
 pub fn card_drag_system(
     mouse_input: Res<ButtonInput<MouseButton>>,
     mut selected_card: ResMut<SelectedCard>,
-    mut card_query: Query<(Entity, &mut Transform, &CardData), (With<Card>, With<Draggable>)>,
+    mut card_query: Query<(Entity, &mut Transform, &CardData, Option<&SkippedWasteCard>), (With<Card>, With<Draggable>)>,
     window_query: Query<&Window>,
 ) {
     let Ok(window) = window_query.single() else { return };
@@ -162,9 +176,9 @@ pub fn card_drag_system(
             );
 
             // Check if any face-up card was clicked
-            for (entity, transform, card_data) in &mut card_query {
-                // Only allow dragging face-up cards
-                if !card_data.is_face_up {
+            for (entity, transform, card_data, skipped) in &mut card_query {
+                // Only allow dragging face-up cards that aren't skipped
+                if !card_data.is_face_up || skipped.is_some() {
                     continue;
                 }
                 
@@ -237,8 +251,6 @@ pub fn card_drop_system(
                 }
             }
             
-
-            
             // First, get the selected card data and store what we need
             let (selected_value, selected_suit) = if let Ok((_, _, card_data, _)) = card_query.get(selected_entity) {
                 (card_data.value, card_data.suit)
@@ -250,6 +262,49 @@ pub fn card_drop_system(
             let mut best_target: Option<(Vec3, f32, &'static str)> = None;
             let mut original_position = Vec3::ZERO;
             let mut cards_to_move = Vec::new();
+            let mut stack_cards = Vec::new();
+            
+            // Get the original position from the selected card first
+            if let Ok((_, transform, _, _)) = card_query.get(selected_entity) {
+                original_position = transform.translation;
+                
+                // Collect all cards that are stacked on top of the selected card
+                for (card_entity, card_transform, card_data, _) in card_query.iter() {
+                    if card_entity != selected_entity {
+                        // Check if this card is at the same X,Y position but higher Z (stacked on top)
+                        let same_position = (card_transform.translation.x - original_position.x).abs() < 5.0 
+                            && (card_transform.translation.y - original_position.y).abs() < 5.0;
+                        let higher_z = card_transform.translation.z > original_position.z;
+                        
+                        if same_position && higher_z {
+                            cards_to_move.push((card_entity, card_transform.translation.z - original_position.z));
+                            stack_cards.push((card_data.suit, card_data.value));
+                        }
+                    }
+                }
+                
+                // Add the selected card to the stack
+                stack_cards.push((selected_suit, selected_value));
+            }
+            
+            // Check if trying to drop on stock pile or waste pile (prevent this)
+            let stock_x = -WINDOW_WIDTH / 2.0 + 100.0;
+            let stock_y = -WINDOW_HEIGHT / 2.0 + 100.0;
+            let waste_x = stock_x + 100.0;
+            let waste_y = stock_y;
+            
+            // Check distance to stock pile center
+            let stock_distance = (cursor_world_pos - Vec2::new(stock_x, stock_y)).length();
+            // Check distance to waste pile center  
+            let waste_distance = (cursor_world_pos - Vec2::new(waste_x, waste_y)).length();
+            
+            if stock_distance < 50.0 || waste_distance < 50.0 {
+                // Don't allow dropping on stock pile or waste pile - snap back to original position
+                if let Ok((_, mut transform, _, _)) = card_query.get_mut(selected_entity) {
+                    transform.translation = original_position;
+                }
+                return;
+            }
             
             // Check tableau targets first
             for (target_pos, distance, target_value, target_suit) in potential_targets {
@@ -260,6 +315,7 @@ pub fn card_drop_system(
                     let target_is_red = matches!(target_suit, CardSuit::Hearts | CardSuit::Diamonds);
                     
                     if selected_is_red != target_is_red { // Colors must be different
+                        // Allow placement on top of cards (we'll handle Z positioning when actually moving)
                         if let Some((_, current_distance, _)) = best_target {
                             if distance < current_distance {
                                 best_target = Some((target_pos, distance, "tableau"));
@@ -271,33 +327,12 @@ pub fn card_drop_system(
                 }
             }
             
-            // If we found a valid target, collect stacked cards info first
-            if let Some((_, _, _)) = best_target {
-                // Get the original position from the selected card
-                if let Ok((_, transform, _, _)) = card_query.get(selected_entity) {
-                    original_position = transform.translation;
-                    
-                    // Collect all cards that are stacked on top of the selected card
-                    for (card_entity, card_transform, _, _) in card_query.iter() {
-                        if card_entity != selected_entity {
-                            // Check if this card is at the same X,Y position but higher Z (stacked on top)
-                            let same_position = (card_transform.translation.x - original_position.x).abs() < 5.0 
-                                && (card_transform.translation.y - original_position.y).abs() < 5.0;
-                            let higher_z = card_transform.translation.z > original_position.z;
-                            
-                            if same_position && higher_z {
-                                cards_to_move.push((card_entity, card_transform.translation.z - original_position.z));
-                            }
-                        }
-                    }
-                }
-            }
-            
             // Now get the selected card data and apply the movement
             if let Ok((_, mut transform, _, _)) = card_query.get_mut(selected_entity) {
                 if let Some((target_pos, _, _)) = best_target {
                     // Position the selected card on top of the target card
-                    let new_position = Vec3::new(target_pos.x, target_pos.y - 30.0, target_pos.z + 1.0);
+                    let new_y = (target_pos.y - 30.0).max(-WINDOW_HEIGHT / 2.0 + 100.0); // Prevent going off bottom of screen
+                    let new_position = Vec3::new(target_pos.x, new_y, target_pos.z + 1.0);
                     transform.translation = new_position;
                     
                     // Update the original position for future reference
@@ -305,9 +340,10 @@ pub fn card_drop_system(
                     
                     // Move all stacked cards to maintain their relative positions
                     for (card_entity, z_offset) in cards_to_move {
+                        let stacked_y = (new_position.y - (z_offset * 30.0)).max(-WINDOW_HEIGHT / 2.0 + 100.0); // Prevent going off bottom of screen
                         let new_card_position = Vec3::new(
                             new_position.x, 
-                            new_position.y - (z_offset * 30.0), // Stack cards vertically
+                            stacked_y, // Stack cards vertically with bounds checking
                             new_position.z + z_offset
                         );
                         commands.entity(card_entity).insert(Transform::from_translation(new_card_position));
@@ -324,11 +360,23 @@ pub fn card_drop_system(
                     // Use the collected tableau pile information
                     for (tableau_pos, is_empty) in &tableau_pile_info {
                         if *is_empty {
-                            // Empty tableau pile - only allow if the top card (being dragged) is a King
+                            // Empty tableau pile - allow if the top card (being dragged) is a King
                             if selected_value == 13 {
-                                target_tableau_pos = Some(*tableau_pos);
-                                should_flip = true;
-                            } else {
+                                // For single cards or incomplete stacks, just check if it's a King
+                                if stack_cards.len() == 1 {
+                                    // Single King card - allow placement
+                                    target_tableau_pos = Some(*tableau_pos);
+                                    should_flip = false; // No card underneath to flip
+                                } else {
+                                    // Multiple cards - check if it's a complete stack
+                                    let mut sorted_stack = stack_cards.clone();
+                                    sorted_stack.sort_by(|a, b| b.1.cmp(&a.1));
+                                    
+                                    if has_complete_stack(&sorted_stack) {
+                                        target_tableau_pos = Some(*tableau_pos);
+                                        should_flip = true;
+                                    }
+                                }
                             }
                         }
                     }
@@ -360,40 +408,143 @@ fn flip_card_underneath(
     asset_server: &Res<AssetServer>,
     card_query: &mut Query<(Entity, &mut Transform, &CardData, &OriginalPosition), With<Card>>,
 ) {
-    // Find all cards at the original position (these are the ones that were covered)
+    // Find the card that was directly underneath the moved card
+    // We need to be more precise - only flip the card that was at the exact same X,Y position
+    // but with a Z value that's just below the moved card's Z
+    
+    let mut cards_at_position = Vec::new();
+    
+    // First, collect all cards at the exact X,Y position
     for (entity, transform, card_data, _) in card_query.iter() { 
+        let x_distance = (transform.translation.x - original_position.x).abs();
+        let y_distance = (transform.translation.y - original_position.y).abs();
         
-        let distance = ((transform.translation.x - original_position.x).powi(2) + 
-                       (transform.translation.y - original_position.y).powi(2)).sqrt();
-                
-        // Use a small distance threshold to account for visual stacking offset
-        if distance < 5.0 && !card_data.is_face_up {
-           
+        // Use a very small threshold for exact positioning
+        if x_distance < 1.0 && y_distance < 1.0 {
+            cards_at_position.push((entity, transform.translation.z, card_data));
+        }
+    }
+    
+    // Sort by Z position to find the card that was directly underneath
+    cards_at_position.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    
+    // Only flip the card that was at the highest Z position (closest to the moved card)
+    // and only if it's face down
+    if let Some((entity, _, card_data)) = cards_at_position.last() {
+        if !card_data.is_face_up {
             // Update the card to be face-up
-            commands.entity(entity).insert(CardData {
+            commands.entity(*entity).insert(CardData {
                 suit: card_data.suit,
                 value: card_data.value,
                 is_face_up: true,
             });
             
             // Add the Draggable component so it can be moved
-            commands.entity(entity).insert(Draggable);
+            commands.entity(*entity).insert(Draggable);
             
             // Change the sprite from CardBack to CardFront
             let front_image_path = get_card_front_image(card_data.suit, card_data.value);
            
             // Remove the old sprite and add the new one
-            commands.entity(entity).remove::<Sprite>();
-            commands.entity(entity).insert(Sprite {
+            commands.entity(*entity).remove::<Sprite>();
+            commands.entity(*entity).insert(Sprite {
                 image: asset_server.load(front_image_path),
                 custom_size: Some(Vec2::new(80.0, 120.0)),
                 ..default()
             });
             
             // Remove the CardBack component and add CardFront
-            commands.entity(entity).remove::<CardBack>();
-            commands.entity(entity).insert(CardFront);
-            
+            commands.entity(*entity).remove::<CardBack>();
+            commands.entity(*entity).insert(CardFront);
         }
     }
+}
+
+pub fn setup_initial_tableau_and_stock(
+    commands: &mut Commands,
+    asset_server: Res<AssetServer>,
+    mut stock_cards: ResMut<StockCards>,
+) {
+    // Create a standard 52-card deck
+    let mut deck = Vec::new();
+    let suits = [CardSuit::Hearts, CardSuit::Diamonds, CardSuit::Clubs, CardSuit::Spades];
+    let values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+    
+    for suit in suits {
+        for value in values {
+            deck.push((suit, value));
+        }
+    }
+    
+    // Shuffle the deck (simplified - just reverse for now)
+    deck.reverse();
+    
+    // Deal exactly 28 cards to the tableau (7 piles with 1, 2, 3, 4, 5, 6, 7 cards)
+    let tableau_start_x = -(6.0 * 100.0) / 2.0;
+    let tableau_y = WINDOW_HEIGHT / 2.0 - 200.0;
+    
+    let mut card_index = 0;
+    for pile in 0..7 {
+        let pile_size = pile + 1; // Stack 1 has 1 card, Stack 2 has 2 cards, etc.
+        let x_pos = tableau_start_x + (pile as f32 * 100.0);
+        
+        for card_in_pile in 0..pile_size {
+            if card_index < deck.len() {
+                let (suit, value) = deck[card_index];
+                
+                // Only the top card of each pile is face-up
+                let is_face_up = card_in_pile == pile_size - 1;
+                
+                // Create card entity
+                let _card_entity = create_card_entity(
+                    commands,
+                    &asset_server,
+                    Vec3::new(x_pos, tableau_y, card_in_pile as f32),
+                    suit,
+                    value,
+                    is_face_up,
+                    (
+                        Draggable, // Only face-up cards are draggable
+                        TableauPile,
+                        OriginalPosition(Vec3::new(x_pos, tableau_y, card_in_pile as f32)),
+                        CoveredCard(None), // Top card is not covered
+                    ),
+                );
+                
+                // Sprite is now handled by the create_card_entity helper function
+                
+                card_index += 1;
+            }
+        }
+    }
+    
+    // Store the remaining 24 cards in the stock pile
+    let remaining_cards: Vec<(CardSuit, u8)> = deck.into_iter().skip(28).collect();
+    stock_cards.0 = remaining_cards;
+    
+    // Create stock pile (top left) - show the top card
+    let stock_x = -WINDOW_WIDTH / 2.0 + 100.0;
+    let stock_y = -WINDOW_HEIGHT / 2.0 + 100.0;
+    
+    // Create stock pile visual representation (always shows card back)
+    create_card_entity(
+        commands,
+        &asset_server,
+        Vec3::new(stock_x, stock_y, 0.0),
+        CardSuit::Hearts, // Dummy suit - not important for stock pile
+        1, // Dummy value - not important for stock pile
+        false, // Always face down
+        (
+            StockPile,
+            CardBack, // Add the CardBack component
+        ),
+    );
+    
+    // Update tableau positions resource
+    let mut tableau_positions = Vec::new();
+    for pile in 0..7 {
+        let x_pos = tableau_start_x + (pile as f32 * 100.0);
+        tableau_positions.push(Vec3::new(x_pos, tableau_y, 0.0));
+    }
+    commands.insert_resource(TableauPositions(tableau_positions));
 }

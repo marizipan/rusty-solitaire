@@ -29,61 +29,16 @@ pub fn get_card_front_image(suit: CardSuit, value: u8) -> String {
         _ => &value.to_string(),
     };
     
-    // Check if the suit needs "Card" prefix
-    let needs_card_prefix = matches!(suit, CardSuit::Hearts | CardSuit::Clubs | CardSuit::Spades);
-    
-    if needs_card_prefix {
-        format!("sprites/cards/{}/{}Card{}.png", suit_name, suit_name, value_name)
-    } else {
-        format!("sprites/cards/{}/{}{}.png", suit_name, suit_name, value_name)
-    }
-}
-
-pub fn get_card_display_value(value: u8) -> String {
-    match value {
-        1 => "A".to_string(),
-        2 => "2".to_string(),
-        3 => "3".to_string(),
-        4 => "4".to_string(),
-        5 => "5".to_string(),
-        6 => "6".to_string(),
-        7 => "7".to_string(),
-        8 => "8".to_string(),   
-        9 => "9".to_string(),
-        10 => "10".to_string(),
-        11 => "J".to_string(),
-        12 => "Q".to_string(),
-        13 => "K".to_string(),
-        _ => value.to_string(),
-    }
-}
-
-pub fn create_deck() -> Vec<(CardSuit, u8)> {
-    let mut deck = Vec::new();
-    let suits = [CardSuit::Hearts, CardSuit::Diamonds, CardSuit::Clubs, CardSuit::Spades];
-    let values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
-    
-    for suit in suits {
-        for value in values {
-            deck.push((suit, value));
+    // Different suits use different naming conventions:
+    match suit {
+        CardSuit::Hearts | CardSuit::Clubs | CardSuit::Spades => {
+            // Hearts (King), Clubs (Stabby), Spades (Corro): suitName + "Card" + valueName
+            format!("sprites/cards/{}/{}Card{}.png", suit_name, suit_name, value_name)
         }
-    }
-    
-    // Shuffle the deck (simplified - just reverse for now)
-    deck.reverse();
-    deck
-}
-
-pub fn can_place_on_empty_tableau(card_value: u8) -> bool {
-    // Only cards with value 13 (Kings) can be placed on empty tableau piles
-    card_value == 13
-} 
-
-pub fn can_place_on_king(card_value: u8) -> bool {
-    // Only a Queen (value 12) can be placed on top of a King (value 13)
-    match card_value {
-        12 => true,  // Queen can be placed on King
-        _ => false,  // All other cards cannot be placed on King
+        CardSuit::Diamonds => {
+            // Diamonds (EvilFerris): suitName + valueName (no "Card" prefix)
+            format!("sprites/cards/{}/{}{}.png", suit_name, suit_name, value_name)
+        }
     }
 }
 
@@ -91,4 +46,34 @@ pub fn can_place_on_card(card_value: u8, target_card_value: u8) -> bool {
     // Cards can only be placed on cards with value +1 (descending order)
     // For example: Queen (12) on King (13), Jack (11) on Queen (12), etc.
     card_value == target_card_value - 1
+}
+
+pub fn has_complete_stack(cards: &[(CardSuit, u8)]) -> bool {
+    // A complete stack must start with King (13) and end with Ace (1)
+    // All cards must be in descending order with alternating colors
+    if cards.is_empty() || cards[0].1 != 13 {
+        return false;
+    }
+    
+    for i in 0..cards.len() - 1 {
+        let current = cards[i];
+        let next = cards[i + 1];
+        
+        // Check descending order
+        if current.1 != next.1 + 1 {
+            return false;
+        }
+        
+        // Check alternating colors
+        let current_is_red = matches!(current.0, CardSuit::Hearts | CardSuit::Diamonds);
+        let next_is_red = matches!(next.0, CardSuit::Hearts | CardSuit::Diamonds);
+        
+        
+        if current_is_red == next_is_red {
+            return false;
+        }
+    }
+    
+    // Must end with Ace (1)
+    cards.last().map_or(false, |card| card.1 == 1)
 }

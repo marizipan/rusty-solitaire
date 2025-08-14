@@ -40,6 +40,9 @@ pub struct StockPile;
 pub struct WastePile;
 
 #[derive(Component)]
+pub struct SkippedWasteCard; // Marks waste cards that have been skipped and are not clickable
+
+#[derive(Component)]
 pub struct CardData {
     pub suit: CardSuit,
     pub value: u8, // 1-13 (Ace=1, Jack=11, Queen=12, King=13)
@@ -68,9 +71,6 @@ pub struct MovingCard {
 
 #[derive(Component)]
 pub struct CardNumber;
-
-#[derive(Component)]
-pub struct CardOutline;
 
 #[derive(Component)]
 pub struct OriginalPosition(pub Vec3);
