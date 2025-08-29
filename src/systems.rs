@@ -540,6 +540,31 @@ pub fn card_drop_system(
                 }
             }
             
+            // Check foundation piles FIRST (higher priority than tableau)
+            let foundation_start_x = -(6.0 * 100.0) / 2.0;
+            let foundation_y = WINDOW_HEIGHT / 2.0 - 100.0;
+            
+            for i in 0..4 {
+                let foundation_x = foundation_start_x + (i as f32 * 100.0);
+                let foundation_pos = Vec3::new(foundation_x, foundation_y, 1.0);
+                let foundation_pile = &foundation_piles.0[i];
+                
+                if foundation_pile.is_empty() {
+                    // Empty foundation pile - only Aces can be placed
+                    if selected_value == 1 {
+                        best_target = Some((foundation_pos, 0.0, "foundation"));
+                        break;
+                    }
+                } else {
+                    // Foundation pile has cards - check if this card can be added
+                    let (top_suit, top_value) = foundation_pile.last().unwrap();
+                    if selected_suit == *top_suit && selected_value == top_value + 1 {
+                        best_target = Some((foundation_pos, 0.0, "foundation"));
+                        break;
+                    }
+                }
+            }
+            
             // Check tableau targets only if we haven't found a foundation pile target
             if best_target.is_none() {
                 for (target_pos, distance, target_value, target_suit) in potential_targets {
@@ -571,7 +596,18 @@ pub fn card_drop_system(
                             }
                         }
                         
-                        if is_top_card {
+                        // Additional check: prevent placing the same card on itself or its own stack
+                        let mut is_valid_target = true;
+                        if let Ok(selected_transform) = draggable_transform_query.get(selected_entity) {
+                            let x_same = (selected_transform.translation.x - target_pos.x).abs() < 5.0;
+                            let y_same = (selected_transform.translation.y - target_pos.y).abs() < 5.0;
+                            if x_same && y_same {
+                                // This would place the card on its own stack - not allowed
+                                is_valid_target = false;
+                            }
+                        }
+                        
+                        if is_top_card && is_valid_target {
                             // Allow placement on top of cards (we'll handle Z positioning when actually moving)
                             if let Some((_target_pos, current_distance, _target_type)) = best_target {
                                 if distance < current_distance {
@@ -1061,48 +1097,80 @@ pub fn waste_card_click_system(
                 
                 // Debug: Print suit compatibility information
                 
-                if waste_is_red != tableau_is_red { // Colors must be different
-                    // Additional check: make sure we're not placing on a card that's already covered
-                    // Only place on the top card of each stack
-                    let mut is_top_card = true;
-                    for (other_entity, other_transform, _) in tableau_cards.iter() {
-                        if other_entity != _tableau_entity {
-                            // Check if this other card is on top of our target
-                            let x_same = (other_transform.translation.x - tableau_transform.translation.x).abs() < 5.0;
-                            let y_same = (other_transform.translation.y - tableau_transform.translation.y).abs() < 5.0;
-                            let z_higher = other_transform.translation.z > tableau_transform.translation.z;
-                            
-                            if x_same && y_same && z_higher {
-                                is_top_card = false;
-                                break;
+                                    if waste_is_red != tableau_is_red { // Colors must be different
+                        // Additional check: make sure we're not placing on a card that's already covered
+                        // Only place on the top card of each stack
+                        let mut is_top_card = true;
+                        for (other_entity, other_transform, _) in tableau_cards.iter() {
+                            if other_entity != _tableau_entity {
+                                // Check if this other card is on top of our target
+                                let x_same = (other_transform.translation.x - tableau_transform.translation.x).abs() < 5.0;
+                                let y_same = (other_transform.translation.y - tableau_transform.translation.y).abs() < 5.0;
+                                let z_higher = other_transform.translation.z > tableau_transform.translation.z;
+                                
+                                if x_same && y_same && z_higher {
+                                    is_top_card = false;
+                                    break;
+                                }
                             }
                         }
-                    }
-                    
-                    if is_top_card {
-                        let distance = (waste_transform.translation - tableau_transform.translation).length();
                         
-                        if let Some((_target_pos, current_distance)) = best_target {
-                            if distance < current_distance {
+                        // Additional check: prevent placing waste card on its own stack
+                        let mut is_valid_target = true;
+                        let waste_x = waste_transform.translation.x;
+                        let waste_y = waste_transform.translation.y;
+                        let tableau_x = tableau_transform.translation.x;
+                        let tableau_y = tableau_transform.translation.y;
+                        
+                        if (waste_x - tableau_x).abs() < 5.0 && (waste_y - tableau_y).abs() < 5.0 {
+                            // This would place the waste card on its own stack - not allowed
+                            is_valid_target = false;
+                        }
+                        
+                        if is_top_card && is_valid_target {
+                            let distance = (waste_transform.translation - tableau_transform.translation).length();
+                            
+                            if let Some((_target_pos, current_distance)) = best_target {
+                                if distance < current_distance {
+                                    best_target = Some((tableau_transform.translation, distance));
+                                }
+                            } else {
                                 best_target = Some((tableau_transform.translation, distance));
                             }
-                        } else {
-                            best_target = Some((tableau_transform.translation, distance));
                         }
-                    } else {
-                        
                     }
-                } else {
-                    // Debug: Print why cards can't be placed together
-                    
-                }
             } else {
                 // Debug: Print why cards can't be placed together (wrong values)
                 
             }
             }
             
-            // If no valid tableau card found, check if it can be placed on empty tableau piles
+            // Check Foundation Piles FIRST (higher priority than tableau)
+            let foundation_start_x = -(6.0 * 100.0) / 2.0;
+            let foundation_y = WINDOW_HEIGHT / 2.0 - 100.0;
+            
+            for i in 0..4 {
+                let foundation_x = foundation_start_x + (i as f32 * 100.0);
+                let foundation_pos = Vec3::new(foundation_x, foundation_y, 1.0);
+                let foundation_pile = &foundation_piles.0[i];
+                
+                if foundation_pile.is_empty() {
+                    // Empty foundation pile - only Aces can be placed
+                    if waste_card_data.value == 1 {
+                        best_target = Some((foundation_pos, 0.0));
+                        break;
+                    }
+                } else {
+                    // Foundation pile has cards - check if this card can be added
+                    let (top_suit, top_value) = foundation_pile.last().unwrap();
+                    if waste_card_data.suit == *top_suit && waste_card_data.value == top_value + 1 {
+                        best_target = Some((foundation_pos, 0.0));
+                        break;
+                    }
+                }
+            }
+            
+            // If no valid foundation pile found, check if it can be placed on empty tableau piles
             if best_target.is_none() {
                 // Only Kings can be placed on empty tableau piles
                 if waste_card_data.value == 13 {
@@ -1119,34 +1187,6 @@ pub fn waste_card_click_system(
                         
                         if is_empty {
                             best_target = Some((*tableau_pos, 0.0)); // Distance 0 for empty piles
-                            break;
-                        }
-                    }
-                }
-            }
-            
-                        // If still no valid target, check if it can be placed on Foundation Piles
-            if best_target.is_none() {
-                // Check Foundation Piles - Aces can go on empty piles, other cards can go on matching suits
-                let foundation_start_x = -(6.0 * 100.0) / 2.0;
-                let foundation_y = WINDOW_HEIGHT / 2.0 - 100.0;
-                
-                for i in 0..4 {
-                    let foundation_x = foundation_start_x + (i as f32 * 100.0);
-                    let foundation_pos = Vec3::new(foundation_x, foundation_y, 1.0);
-                    let foundation_pile = &foundation_piles.0[i];
-                    
-                    if foundation_pile.is_empty() {
-                        // Empty foundation pile - only Aces can be placed
-                        if waste_card_data.value == 1 {
-                            best_target = Some((foundation_pos, 0.0));
-                            break;
-                        }
-                    } else {
-                        // Foundation pile has cards - check if this card can be added
-                        let (top_suit, top_value) = foundation_pile.last().unwrap();
-                        if waste_card_data.suit == *top_suit && waste_card_data.value == top_value + 1 {
-                            best_target = Some((foundation_pos, 0.0));
                             break;
                         }
                     }
@@ -1471,7 +1511,7 @@ pub fn update_tableau_visual_stacking_system(
                 if let Ok((_entity_id, mut transform, _card_data)) = tableau_cards.get_mut(*entity) {
                     // Apply stacking offset: each card above gets a 25-pixel Y offset
                     // This ensures each card shows enough of itself to remain clickable
-                    let stacked_y = base_y - (stack_index as f32 * 30.0);
+                    let stacked_y = base_y - (stack_index as f32 * 25.0);
                     
                     // Update the transform to show proper visual stacking
                     transform.translation.y = stacked_y;
