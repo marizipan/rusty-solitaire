@@ -63,11 +63,7 @@ pub struct SelectedCard(pub Option<Entity>);
 #[derive(Resource)]
 pub struct StockCards(pub Vec<(CardSuit, u8)>);
 
-#[derive(Component)]
-pub struct MovingCard {
-    pub target_position: Vec3,
-    pub speed: f32,
-}
+
 
 #[derive(Component)]
 pub struct CardNumber;
@@ -78,5 +74,18 @@ pub struct OriginalPosition(pub Vec3);
 #[derive(Component)]
 pub struct CoveredCard(pub Option<Entity>); // Points to the card that is covering this one
 
+#[derive(Component)]
+pub struct NeedsFlipUnderneath(pub Vec3); // Marks that a card underneath needs to be flipped
+
+#[derive(Component)]
+pub struct AlreadyFlipped; // Marks that a card has already been flipped in this movement
+
+
+
 #[derive(Resource)]
-pub struct TableauPositions(pub Vec<Vec3>); 
+pub struct TableauPositions(pub Vec<Vec3>);
+
+#[derive(Resource)]
+pub struct FoundationPiles(pub Vec<Vec<(CardSuit, u8)>>); // Tracks the entire stack of each foundation pile 
+
+ 

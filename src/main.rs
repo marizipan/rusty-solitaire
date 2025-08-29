@@ -15,6 +15,7 @@ fn main() {
         .insert_resource(SelectedCard(None))
         .insert_resource(StockCards(Vec::new()))
         .insert_resource(TableauPositions(Vec::new()))
+        .insert_resource(FoundationPiles(vec![Vec::new(); 4])) // Initialize 4 empty foundation piles
         .add_plugins(DefaultPlugins)      
         .add_systems(Startup, setup_game)
         .add_systems(
@@ -23,8 +24,13 @@ fn main() {
                 card_drag_system,
                 card_drop_system,
                 stock_click_system,
-                double_click_system,
-                card_movement_system,
+                waste_card_click_system, // User-initiated waste card placement
+                flip_cards_system, // Handle flipping cards underneath moved cards
+                validate_card_draggability_system, // Validate that only top cards can be dragged
+                cleanup_flip_markers_system, // Clean up flip markers to prevent blocking future flips
+                update_tableau_visual_stacking_system, // Maintain visual stacking of tableau cards
+
+                auto_move_to_foundation_system, // Auto-move cards to foundation piles when possible
 
             ),
         )
@@ -35,10 +41,5 @@ fn main() {
 
 
 // Things to fix: 
-// suits are randomly incompatible
-// cards are going into the Stock pile for some reason
-// Stock pile is not being recycled
 // Cards are not moving together after they have been paired
-// Stabby queen still disappears when clicked
-// Cards do not come out of the stock pile
-// Corro Queen seemingly overrides other queen cards?
+// Cards below the top layer are not flipping
