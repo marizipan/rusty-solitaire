@@ -43,6 +43,9 @@ pub struct WastePile;
 pub struct SkippedWasteCard; // Marks waste cards that have been skipped and are not clickable
 
 #[derive(Component)]
+pub struct UndoButton;
+
+#[derive(Component)]
 pub struct CardData {
     pub suit: CardSuit,
     pub value: u8, // 1-13 (Ace=1, Jack=11, Queen=12, King=13)
@@ -86,6 +89,33 @@ pub struct AlreadyFlipped; // Marks that a card has already been flipped in this
 pub struct TableauPositions(pub Vec<Vec3>);
 
 #[derive(Resource)]
-pub struct FoundationPiles(pub Vec<Vec<(CardSuit, u8)>>); // Tracks the entire stack of each foundation pile 
+pub struct FoundationPiles(pub Vec<Vec<(CardSuit, u8)>>); // Tracks the entire stack of each foundation pile
+
+#[derive(Resource)]
+pub struct ClickedEntity(pub Option<Entity>); // Tracks the last clicked entity for double-click detection 
+
+#[derive(Resource)]
+pub struct UndoStack(pub Vec<UndoAction>); // Tracks undo actions
+
+#[derive(Clone)]
+pub struct UndoAction {
+    pub card_entity: Entity,
+    pub from_position: Vec3,
+    pub to_position: Vec3,
+    pub from_components: Vec<ComponentType>,
+    pub to_components: Vec<ComponentType>,
+    pub stack_cards: Vec<(Entity, Vec3)>, // For moving entire stacks
+}
+
+#[derive(Clone, PartialEq)]
+pub enum ComponentType {
+    TableauPile,
+    WastePile,
+    FoundationPile,
+    StockPile,
+    Draggable,
+    CardFront,
+    CardBack,
+}
 
  

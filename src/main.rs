@@ -16,6 +16,8 @@ fn main() {
         .insert_resource(StockCards(Vec::new()))
         .insert_resource(TableauPositions(Vec::new()))
         .insert_resource(FoundationPiles(vec![Vec::new(); 4])) // Initialize 4 empty foundation piles
+        .insert_resource(ClickedEntity(None)) // Initialize clicked entity tracking for double-click detection
+        .insert_resource(UndoStack(Vec::new())) // Initialize undo stack
         .add_plugins(DefaultPlugins)      
         .add_systems(Startup, setup_game)
         .add_systems(
@@ -26,12 +28,10 @@ fn main() {
                 stock_click_system,
                 waste_card_click_system, // User-initiated waste card placement
                 flip_cards_system, // Handle flipping cards underneath moved cards
-                validate_card_draggability_system, // Validate that only top cards can be dragged
-                cleanup_flip_markers_system, // Clean up flip markers to prevent blocking future flips
+                double_click_foundation_system, // Auto-move cards to foundation piles on click
+                undo_button_system, // Handle undo button clicks
+                undo_system, // Handle undo functionality
                 update_tableau_visual_stacking_system, // Maintain visual stacking of tableau cards
-
-                auto_move_to_foundation_system, // Auto-move cards to foundation piles when possible
-
             ),
         )
         .run();

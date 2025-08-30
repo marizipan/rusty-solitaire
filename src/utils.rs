@@ -18,35 +18,35 @@ pub fn get_card_data_from_filename(filename: &str) -> Option<(CardSuit, u8)> {
         "sprites/cards/King/KingCardQ.png" => Some((CardSuit::Hearts, 12)),
         "sprites/cards/King/KingCardK.png" => Some((CardSuit::Hearts, 13)),
         
-        // Diamonds (EvilFerris) - format: EvilFerris{value}.png
-        "sprites/cards/EvilFerris/EvilFerrisA.png" => Some((CardSuit::Diamonds, 1)),
-        "sprites/cards/EvilFerris/EvilFerris2.png" => Some((CardSuit::Diamonds, 2)),
-        "sprites/cards/EvilFerris/EvilFerris3.png" => Some((CardSuit::Diamonds, 3)),
-        "sprites/cards/EvilFerris/EvilFerris4.png" => Some((CardSuit::Diamonds, 4)),
-        "sprites/cards/EvilFerris/EvilFerris5.png" => Some((CardSuit::Diamonds, 5)),
-        "sprites/cards/EvilFerris/EvilFerris6.png" => Some((CardSuit::Diamonds, 6)),
-        "sprites/cards/EvilFerris/EvilFerris7.png" => Some((CardSuit::Diamonds, 7)),
-        "sprites/cards/EvilFerris/EvilFerris8.png" => Some((CardSuit::Diamonds, 8)),
-        "sprites/cards/EvilFerris/EvilFerris9.png" => Some((CardSuit::Diamonds, 9)),
-        "sprites/cards/EvilFerris/EvilFerris10.png" => Some((CardSuit::Diamonds, 10)),
-        "sprites/cards/EvilFerris/EvilFerrisJ.png" => Some((CardSuit::Diamonds, 11)),
-        "sprites/cards/EvilFerris/EvilFerrisQ.png" => Some((CardSuit::Diamonds, 12)),
-        "sprites/cards/EvilFerris/EvilFerrisK.png" => Some((CardSuit::Diamonds, 13)),
+        // Clubs (EvilFerris) - format: EvilFerris{value}.png
+        "sprites/cards/EvilFerris/EvilFerrisA.png" => Some((CardSuit::Clubs, 1)),
+        "sprites/cards/EvilFerris/EvilFerris2.png" => Some((CardSuit::Clubs, 2)),
+        "sprites/cards/EvilFerris/EvilFerris3.png" => Some((CardSuit::Clubs, 3)),
+        "sprites/cards/EvilFerris/EvilFerris4.png" => Some((CardSuit::Clubs, 4)),
+        "sprites/cards/EvilFerris/EvilFerris5.png" => Some((CardSuit::Clubs, 5)),
+        "sprites/cards/EvilFerris/EvilFerris6.png" => Some((CardSuit::Clubs, 6)),
+        "sprites/cards/EvilFerris/EvilFerris7.png" => Some((CardSuit::Clubs, 7)),
+        "sprites/cards/EvilFerris/EvilFerris8.png" => Some((CardSuit::Clubs, 8)),
+        "sprites/cards/EvilFerris/EvilFerris9.png" => Some((CardSuit::Clubs, 9)),
+        "sprites/cards/EvilFerris/EvilFerris10.png" => Some((CardSuit::Clubs, 10)),
+        "sprites/cards/EvilFerris/EvilFerrisJ.png" => Some((CardSuit::Clubs, 11)),
+        "sprites/cards/EvilFerris/EvilFerrisQ.png" => Some((CardSuit::Clubs, 12)),
+        "sprites/cards/EvilFerris/EvilFerrisK.png" => Some((CardSuit::Clubs, 13)),
         
-        // Clubs (Stabby) - format: StabbyCard{value}.png
-        "sprites/cards/Stabby/StabbyCardA.png" => Some((CardSuit::Clubs, 1)),
-        "sprites/cards/Stabby/StabbyCard2.png" => Some((CardSuit::Clubs, 2)),
-        "sprites/cards/Stabby/StabbyCard3.png" => Some((CardSuit::Clubs, 3)),
-        "sprites/cards/Stabby/StabbyCard4.png" => Some((CardSuit::Clubs, 4)),
-        "sprites/cards/Stabby/StabbyCard5.png" => Some((CardSuit::Clubs, 5)),
-        "sprites/cards/Stabby/StabbyCard6.png" => Some((CardSuit::Clubs, 6)),
-        "sprites/cards/Stabby/StabbyCard7.png" => Some((CardSuit::Clubs, 7)),
-        "sprites/cards/Stabby/StabbyCard8.png" => Some((CardSuit::Clubs, 8)),
-        "sprites/cards/Stabby/StabbyCard9.png" => Some((CardSuit::Clubs, 9)),
-        "sprites/cards/Stabby/StabbyCard10.png" => Some((CardSuit::Clubs, 10)),
-        "sprites/cards/Stabby/StabbyCardJ.png" => Some((CardSuit::Clubs, 11)),
-        "sprites/cards/Stabby/StabbyCardQ.png" => Some((CardSuit::Clubs, 12)),
-        "sprites/cards/Stabby/StabbyCardK.png" => Some((CardSuit::Clubs, 13)),
+        // Diamonds (Stabby) - format: StabbyCard{value}.png
+        "sprites/cards/Stabby/StabbyCardA.png" => Some((CardSuit::Diamonds, 1)),
+        "sprites/cards/Stabby/StabbyCard2.png" => Some((CardSuit::Diamonds, 2)),
+        "sprites/cards/Stabby/StabbyCard3.png" => Some((CardSuit::Diamonds, 3)),
+        "sprites/cards/Stabby/StabbyCard4.png" => Some((CardSuit::Diamonds, 4)),
+        "sprites/cards/Stabby/StabbyCard5.png" => Some((CardSuit::Diamonds, 5)),
+        "sprites/cards/Stabby/StabbyCard6.png" => Some((CardSuit::Diamonds, 6)),
+        "sprites/cards/Stabby/StabbyCard7.png" => Some((CardSuit::Diamonds, 7)),
+        "sprites/cards/Stabby/StabbyCard8.png" => Some((CardSuit::Diamonds, 8)),
+        "sprites/cards/Stabby/StabbyCard9.png" => Some((CardSuit::Diamonds, 9)),
+        "sprites/cards/Stabby/StabbyCard10.png" => Some((CardSuit::Diamonds, 10)),
+        "sprites/cards/Stabby/StabbyCardJ.png" => Some((CardSuit::Diamonds, 11)),
+        "sprites/cards/Stabby/StabbyCardQ.png" => Some((CardSuit::Diamonds, 12)),
+        "sprites/cards/Stabby/StabbyCardK.png" => Some((CardSuit::Diamonds, 13)),
         
         // Spades (Corro) - format: CorroCard{value}.png
         "sprites/cards/Corro/CorroCardA.png" => Some((CardSuit::Spades, 1)),
@@ -75,8 +75,8 @@ pub fn get_card_back_image(_suit: CardSuit) -> &'static str {
 pub fn get_card_front_image(suit: CardSuit, value: u8) -> String {
     let suit_name = match suit {
         CardSuit::Hearts => "King",
-        CardSuit::Diamonds => "EvilFerris", 
-        CardSuit::Clubs => "Stabby",
+        CardSuit::Diamonds => "Stabby", 
+        CardSuit::Clubs => "EvilFerris",
         CardSuit::Spades => "Corro",
     };
     
@@ -99,12 +99,16 @@ pub fn get_card_front_image(suit: CardSuit, value: u8) -> String {
     
     // Different suits use different naming conventions:
     match suit {
-        CardSuit::Hearts | CardSuit::Clubs | CardSuit::Spades => {
-            // Hearts (King), Clubs (Stabby), Spades (Corro): suitName + "Card" + valueName
+        CardSuit::Hearts | CardSuit::Spades => {
+            // Hearts (King), Spades (Corro): suitName + "Card" + valueName
             format!("sprites/cards/{}/{}Card{}.png", suit_name, suit_name, value_name)
         }
         CardSuit::Diamonds => {
-            // Diamonds (EvilFerris): suitName + valueName (no "Card" prefix)
+            // Diamonds (Stabby): suitName + "Card" + valueName
+            format!("sprites/cards/{}/{}Card{}.png", suit_name, suit_name, value_name)
+        }
+        CardSuit::Clubs => {
+            // Clubs (EvilFerris): suitName + valueName (no "Card" prefix)
             format!("sprites/cards/{}/{}{}.png", suit_name, suit_name, value_name)
         }
     }
