@@ -42,15 +42,18 @@ fn main() {
         .add_systems(
             Update,
             (
-                card_drag_system,
-                card_drop_system,
+                // Input systems first
                 stock_click_system,
                 waste_card_click_system, // User-initiated waste card placement
-                flip_cards_system, // Handle flipping cards underneath moved cards
                 double_click_foundation_system, // Auto-move cards to foundation piles on click
                 undo_button_system, // Handle undo button clicks
+                // Drag and drop systems
+                card_drag_system,
+                card_drop_system,
+                // Update systems last
+                flip_cards_system, // Handle flipping cards underneath moved cards
                 undo_system, // Handle undo functionality
-                update_tableau_visual_stacking_system, // Maintain visual stacking of tableau cards
+                update_tableau_visual_stacking_system, // Maintain visual stacking of tableau cards. Never disable this.
             ),
         )
         .run();

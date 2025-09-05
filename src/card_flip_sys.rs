@@ -11,7 +11,6 @@ pub fn flip_cards_system(
     all_card_data_query: Query<&CardData, With<Card>>,
     all_entity_query: Query<Entity, With<Card>>,
     asset_server: Res<AssetServer>,
-    mut foundation_piles: ResMut<FoundationPiles>,
 ) {
     for (entity, needs_flip) in needs_flip_query.iter() {
         let original_position = needs_flip.0;
@@ -19,16 +18,10 @@ pub fn flip_cards_system(
         // Remove the entity immediately to prevent duplicate processing
         commands.entity(entity).despawn();
         
-
-        
-
-        
-        
         // Find face-down cards at the original position that need to be flipped
         let mut cards_at_position = Vec::new();
         
-        
-        // Collect all cards at the original X,Y position with more precise detection
+        // Collect all cards at the original X,Y position with precise detection
         for card_entity in all_entity_query.iter() { 
             if let Ok(transform) = all_transform_query.get(card_entity) {
                 if let Ok(card_data) = all_card_data_query.get(card_entity) {
@@ -40,12 +33,9 @@ pub fn flip_cards_system(
                     let x_distance = (transform.translation.x - original_position.x).abs();
                     let y_distance = (transform.translation.y - original_position.y).abs();
                     
-                    
-                    // Position check for tableau stacking - cards are stacked with 30px Y offsets
-                    // Use more reasonable tolerances to find cards in the same stack
-                    // We want to find face-down cards at the same X,Y position
-                    // The Z comparison doesn't matter here since we're just looking for cards at the same position
-                    if x_distance < 25.0 && y_distance < 80.0 {
+                    // Use precise position matching - cards should be at the exact same X,Y position
+                    // Only allow small tolerance for floating point precision
+                    if x_distance < 5.0 && y_distance < 5.0 {
                         cards_at_position.push((card_entity, transform.translation.z, card_data));
                     }
                 }
@@ -54,7 +44,6 @@ pub fn flip_cards_system(
         
         // Sort by Z position to find the card that was directly underneath
         cards_at_position.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        
         
         // Find and flip ONLY the topmost face-down card (highest Z position = closest to camera)
         // Only flip ONE card per movement to prevent multiple flips
@@ -83,11 +72,6 @@ pub fn flip_cards_system(
         
             // Remove the CardBack component and add CardFront
             commands.entity(*card_entity).insert(CardFront);
-            
-            // Note: We're not using AlreadyFlipped component to avoid complexity
-            // The system processes each flip request only once per frame
-            
-        } else {
         }
     }
 }
