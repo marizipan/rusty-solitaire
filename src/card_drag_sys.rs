@@ -1,9 +1,8 @@
 use bevy::prelude::*;
 use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
-use bevy::input::keyboard::KeyCode;
 use crate::components::*;
-use crate::utils::get_card_back_image;
+use crate::utils::{is_red_suit, is_valid_stack_sequence};
 
 
 
@@ -24,13 +23,10 @@ pub fn card_drag_system(
     if mouse_input.just_pressed(MouseButton::Left) {
         // Get mouse position
         if let Some(cursor_pos) = window.cursor_position() {
-            println!("DRAG DEBUG: Raw cursor pos: ({:.1}, {:.1}), window: {}x{}", 
-                cursor_pos.x, cursor_pos.y, window.width(), window.height());
             let cursor_world_pos = Vec2::new(
                 cursor_pos.x - window.width() / 2.0,
                 window.height() / 2.0 - cursor_pos.y,
             );
-            println!("DRAG DEBUG: Calculated world pos: ({:.1}, {:.1})", cursor_world_pos.x, cursor_world_pos.y);
 
             // Check if any face-up card was clicked
             for entity in &entity_query {
@@ -111,27 +107,7 @@ pub fn card_drag_system(
                                     all_cards.sort_by(|a, b| b.1.cmp(&a.1));
                                     
                                     // Check if the sequence is valid
-                                    let mut is_valid_sequence = true;
-                                    for i in 0..all_cards.len() - 1 {
-                                        let current = all_cards[i];
-                                        let next = all_cards[i + 1];
-                                        
-                                        // Check descending order (current value should be higher than next)
-                                        if current.1 <= next.1 {
-                                            is_valid_sequence = false;
-                                            break;
-                                        }
-                                        
-                                        // Check alternating colors (red on black, black on red)
-                                        let current_is_red = matches!(current.0, CardSuit::Hearts | CardSuit::Diamonds);
-                                        let next_is_red = matches!(next.0, CardSuit::Hearts | CardSuit::Diamonds);
-                                        if current_is_red == next_is_red {
-                                            is_valid_sequence = false;
-                                            break;
-                                        }
-                                    }
-                                    
-                                    can_lead_stack = is_valid_sequence;
+                                    can_lead_stack = is_valid_stack_sequence(&all_cards);
                                 }
                             }
                             
@@ -220,7 +196,6 @@ pub fn card_drag_system(
                         // If there are face-down cards underneath, add the flip component
                         // This triggers the flip system when the card is moved
                         if has_face_down_underneath {
-                            println!("FLIP DEBUG: Face-up card clicked with face-down cards underneath, adding NeedsFlipUnderneath");
                             commands.entity(entity).insert(NeedsFlipUnderneath(current_pos));
                         }
                             

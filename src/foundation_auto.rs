@@ -1,7 +1,4 @@
 use bevy::prelude::*;
-use bevy::input::ButtonInput;
-use bevy::input::mouse::MouseButton;
-use bevy::input::keyboard::KeyCode;
 use crate::components::*;
 use crate::utils::get_card_back_image;
 
@@ -12,8 +9,8 @@ pub fn auto_move_to_foundation_system(
     tableau_cards: Query<(Entity, &Transform, &CardData), (With<TableauPile>, With<CardFront>, Without<StockPile>)>,
     waste_cards: Query<(Entity, &Transform, &CardData), (With<WastePile>, With<CardFront>, Without<StockPile>)>,
 ) {
-    // TEMPORARILY DISABLED: Auto-move system is causing cards to move immediately
-    // This should be re-enabled with proper delay logic later
+    // Auto-move system is disabled to prevent cards from moving immediately
+    // This can be re-enabled with proper delay logic if needed
     return;
     
     // Check tableau cards for auto-move to foundation (excluding stock pile cards)

@@ -30,27 +30,18 @@ pub fn undo_button_system(
             window.height() / 2.0 - cursor_pos.y  // Center at window center, flip Y
         );
         
-        // Debug the conversion
-        println!("UNDO DEBUG: Screen cursor: ({:.1}, {:.1}) -> World cursor: ({:.1}, {:.1})", 
-            cursor_pos.x, cursor_pos.y, cursor_world_pos.x, cursor_world_pos.y);
         
         // Check if undo button was clicked
         for undo_transform in undo_button_query.iter() {
             let button_pos = undo_transform.translation;
             let distance = (cursor_world_pos - button_pos.truncate()).length();
-            println!("UNDO DEBUG: Button at ({:.1}, {:.1}), cursor at ({:.1}, {:.1}), distance: {:.1}", 
-                button_pos.x, button_pos.y, cursor_world_pos.x, cursor_world_pos.y, distance);
             if distance < 60.0 { // Within button bounds (increased for better usability)
-                println!("UNDO DEBUG: Undo button clicked!");
-                println!("UNDO DEBUG: Undo stack has {} actions", undo_stack.0.len());
                 // Proper undo: restore card to previous state
                 if let Some(undo_action) = undo_stack.0.pop() {
-                    println!("UNDO DEBUG: Undoing move for card entity {:?}", undo_action.card_entity);
                     
                     // CRITICAL FIX: Check if the entity still exists before trying to modify it
                     // This prevents crashes when entities have been despawned and recreated
                     if !commands.get_entity(undo_action.card_entity).is_ok() {
-                        println!("UNDO DEBUG: Entity {:?} no longer exists, skipping undo", undo_action.card_entity);
                         continue; // Skip this undo action
                     }
                     
@@ -96,8 +87,6 @@ pub fn undo_button_system(
                         if let Ok(card_data) = card_data_query.get(undo_action.card_entity) {
                             // Add the card back to the stock pile data structure
                             stock_cards.0.push((card_data.suit, card_data.value));
-                            println!("UNDO DEBUG: Restored card {} of {} to stock pile data (stock now has {} cards)", 
-                                card_data.value, format!("{:?}", card_data.suit), stock_cards.0.len());
                             
                             // CRITICAL FIX: Also restore the card back sprite since stock cards are face down
                             commands.entity(undo_action.card_entity).insert(Sprite {
@@ -115,9 +104,7 @@ pub fn undo_button_system(
                         }
                     }
                     
-                    println!("UNDO DEBUG: Undo completed successfully");
                 } else {
-                    println!("UNDO DEBUG: No actions to undo");
                 }
             }
         }
@@ -139,12 +126,10 @@ pub fn undo_system(
         && (keyboard_input.just_pressed(KeyCode::KeyZ) || keyboard_input.just_pressed(KeyCode::KeyU)) {
         
         if let Some(undo_action) = undo_stack.0.pop() {
-            println!("UNDO DEBUG: Undoing move for card entity {:?}", undo_action.card_entity);
             
             // CRITICAL FIX: Check if the entity still exists before trying to modify it
             // This prevents crashes when entities have been despawned and recreated
             if !commands.get_entity(undo_action.card_entity).is_ok() {
-                println!("UNDO DEBUG: Entity {:?} no longer exists, skipping undo", undo_action.card_entity);
                 return; // Skip this undo action
             }
             
@@ -190,8 +175,6 @@ pub fn undo_system(
                 if let Ok(card_data) = card_data_query.get(undo_action.card_entity) {
                     // Add the card back to the stock pile data structure
                     stock_cards.0.push((card_data.suit, card_data.value));
-                    println!("UNDO DEBUG: Restored card {} of {} to stock pile data (stock now has {} cards)", 
-                        card_data.value, format!("{:?}", card_data.suit), stock_cards.0.len());
                     
                     // CRITICAL FIX: Also restore the card back sprite since stock cards are face down
                     commands.entity(undo_action.card_entity).insert(Sprite {
@@ -209,9 +192,7 @@ pub fn undo_system(
                 }
             }
             
-            println!("UNDO DEBUG: Undo completed successfully");
         } else {
-            println!("UNDO DEBUG: No actions to undo");
         }
     }
 }

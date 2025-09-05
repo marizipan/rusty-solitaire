@@ -1,3 +1,4 @@
+use bevy::prelude::*;
 use crate::components::CardSuit;
 
 // Direct mapping from filename to card data - more verbose but completely reliable
@@ -120,6 +121,43 @@ pub fn can_place_on_card(card_value: u8, target_card_value: u8) -> bool {
     card_value == target_card_value - 1
 }
 
+pub fn is_red_suit(suit: CardSuit) -> bool {
+    matches!(suit, CardSuit::Hearts | CardSuit::Diamonds)
+}
+
+pub fn can_place_on_tableau(card_value: u8, card_suit: CardSuit, target_value: u8, target_suit: CardSuit) -> bool {
+    // Tableau placement rules: descending order with alternating colors
+    can_place_on_card(card_value, target_value) && is_red_suit(card_suit) != is_red_suit(target_suit)
+}
+
+pub fn is_valid_stack_sequence(cards: &[(CardSuit, u8)]) -> bool {
+    if cards.len() <= 1 {
+        return true;
+    }
+    
+    // Sort by value in descending order (highest to lowest)
+    let mut sorted_cards = cards.to_vec();
+    sorted_cards.sort_by(|a, b| b.1.cmp(&a.1));
+    
+    // Check if the sequence is valid (descending order with alternating colors)
+    for i in 0..sorted_cards.len() - 1 {
+        let current = sorted_cards[i];
+        let next = sorted_cards[i + 1];
+        
+        // Check descending order (current value should be higher than next)
+        if current.1 <= next.1 {
+            return false;
+        }
+        
+        // Check alternating colors (red on black, black on red)
+        if is_red_suit(current.0) == is_red_suit(next.0) {
+            return false;
+        }
+    }
+    
+    true
+}
+
 pub fn has_complete_stack(cards: &[(CardSuit, u8)]) -> bool {
     // A complete stack must start with King (13) and end with Ace (1)
     // All cards must be in descending order with alternating colors
@@ -127,24 +165,26 @@ pub fn has_complete_stack(cards: &[(CardSuit, u8)]) -> bool {
         return false;
     }
     
-    for i in 0..cards.len() - 1 {
-        let current = cards[i];
-        let next = cards[i + 1];
-        
-        // Check descending order
-        if current.1 != next.1 + 1 {
-            return false;
-        }
-        
-        // Check alternating colors
-        let current_is_red = matches!(current.0, CardSuit::Hearts | CardSuit::Diamonds);
-        let next_is_red = matches!(next.0, CardSuit::Hearts | CardSuit::Diamonds);
-        
-        if current_is_red == next_is_red {
-            return false;
-        }
+    // Must end with Ace (1)
+    if cards.last().map_or(true, |card| card.1 != 1) {
+        return false;
     }
     
-    // Must end with Ace (1)
-    cards.last().map_or(false, |card| card.1 == 1)
+    // Check if the sequence is valid
+    is_valid_stack_sequence(cards)
+}
+
+pub fn is_in_waste_or_stock_area(position: Vec2) -> bool {
+    // Check if a position is in the waste or stock pile areas
+    // These areas should never accept card drops in solitaire
+    let waste_x = -(6.0 * 100.0) / 2.0 + (5.0 * 100.0); // Above Stack 6 (x = 200)
+    let waste_y = 260.0; // WINDOW_HEIGHT / 2.0 - 100.0
+    let stock_x = -(6.0 * 100.0) / 2.0 + (6.0 * 100.0); // Above Stack 7 (x = 300)
+    let stock_y = waste_y;
+    
+    let waste_distance = (position - Vec2::new(waste_x, waste_y)).length();
+    let stock_distance = (position - Vec2::new(stock_x, stock_y)).length();
+    
+    // Use a generous detection radius to prevent any cards from being placed near these areas
+    waste_distance < 80.0 || stock_distance < 80.0
 }

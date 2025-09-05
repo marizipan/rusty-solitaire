@@ -58,7 +58,3 @@ fn main() {
 
 
 
-
-// Things to fix: 
-// Cards are not moving together after they have been paired
-// Cards below the top layer are not flipping

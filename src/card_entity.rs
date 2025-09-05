@@ -1,6 +1,4 @@
 use bevy::prelude::*;
-use bevy::input::ButtonInput;
-use bevy::input::mouse::MouseButton;
 use bevy::ecs::query::Or;
 use crate::components::*;
 use crate::utils::{get_card_front_image, get_card_back_image, can_place_on_card, get_card_data_from_filename};

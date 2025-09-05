@@ -1,9 +1,6 @@
 use bevy::prelude::*;
-use bevy::input::ButtonInput;
-use bevy::input::mouse::MouseButton;
-use bevy::input::keyboard::KeyCode;
 use crate::components::*;
-use crate::utils::get_card_back_image;
+use crate::utils::{is_red_suit, is_valid_stack_sequence, is_in_waste_or_stock_area};
 
 
 
@@ -61,6 +58,12 @@ pub fn card_drop_system(
                     
                     if let Ok(target_transform) = draggable_transform_query.get(entity) {
                         let target_pos = target_transform.translation;
+                        
+                        // CRITICAL: Prevent targeting cards that are in waste or stock pile areas
+                        if is_in_waste_or_stock_area(target_pos.truncate()) {
+                            continue;
+                        }
+                        
                         // Check if this is a tableau card by looking at its position
                         if target_pos.y < -300.0 || target_pos.y > 100.0 {
                             continue;
@@ -91,22 +94,22 @@ pub fn card_drop_system(
                         if is_top_card {
                             let distance = (cursor_world_pos - target_pos.truncate()).length();
                             potential_targets.push((target_pos, distance, target_card_data.value, target_card_data.suit));
-                            println!("TARGET DEBUG: Added valid target at ({:.1}, {:.1}) - {} of {} (distance: {:.1})", 
-                                target_pos.x, target_pos.y, target_card_data.value, format!("{:?}", target_card_data.suit), distance);
                         } else {
-                            println!("TARGET DEBUG: Skipped occupied position at ({:.1}, {:.1}) - {} of {} (not top card)", 
-                                target_pos.x, target_pos.y, target_card_data.value, format!("{:?}", target_card_data.suit));
                         }
                     }
                 }
             }
             
-            println!("TARGET DEBUG: Found {} potential tableau targets", potential_targets.len());
             
             // Check tableau pile positions
             for tableau_pos in &tableau_positions.0 {
                 let distance = (cursor_world_pos - tableau_pos.truncate()).length();
                 if distance < 50.0 {
+                    // CRITICAL: Ensure we're not placing on waste or stock pile areas
+                    if is_in_waste_or_stock_area(tableau_pos.truncate()) {
+                        continue;
+                    }
+                    
                     let mut pile_has_cards = false;
                     for entity in &draggable_entity_query {
                         if let Ok(card_transform) = draggable_transform_query.get(entity) {
@@ -165,9 +168,6 @@ pub fn card_drop_system(
                                 
                                 let is_part_of_stack = x_same && is_valid_stack_offset && is_exact_stack_position;
                                 
-                                // Always show stack detection debug for troubleshooting
-                                println!("STACK DEBUG: Stack detection - card at ({:.1}, {:.1}), original at ({:.1}, {:.1}), x_same: {}, stack_offset: {:.1}, is_exact_position: {}, is_part_of_stack: {}", 
-                                    card_transform.translation.x, card_transform.translation.y, original_position.x, original_position.y, x_same, stack_offset, is_exact_stack_position, is_part_of_stack);
                                 
                                 if is_part_of_stack {
                                     // CRITICAL: Only include face-up cards in the stack
@@ -184,9 +184,6 @@ pub fn card_drop_system(
                                             cards_to_move.push((card_entity, stack_index));
                                             stack_cards.push((card_data.suit, card_data.value));
                                             
-                                            if original_position.x >= 0.0 {
-                                                println!("STACK DEBUG: Added to stack - card {} of {} at index {}", card_data.value, format!("{:?}", card_data.suit), stack_index);
-                                            }
                                         }
                                     }
                                     // Face-down cards are ignored and will not be moved
@@ -213,23 +210,17 @@ pub fn card_drop_system(
                         // Check descending order
                         if current.1 != next.1 + 1 {
                             is_valid_stack = false;
-                            println!("STACK VALIDATION DEBUG: Invalid sequence detected during collection - {} not followed by {}", current.1, next.1);
                             break;
                         }
                         
                         // Check alternating colors
-                        let current_is_red = matches!(current.0, CardSuit::Hearts | CardSuit::Diamonds);
-                        let next_is_red = matches!(next.0, CardSuit::Hearts | CardSuit::Diamonds);
-                        if current_is_red == next_is_red {
+                        if is_red_suit(current.0) == is_red_suit(next.0) {
                             is_valid_stack = false;
-                            println!("STACK VALIDATION DEBUG: Invalid colors detected during collection - both {} and {} are {}", 
-                                current.1, next.1, if current_is_red { "red" } else { "black" });
                             break;
                         }
                     }
                     
                     if !is_valid_stack {
-                        println!("STACK VALIDATION DEBUG: Invalid stack structure detected during collection, clearing stack");
                         // Clear the invalid stack
                         stack_cards.clear();
                         cards_to_move.clear();
@@ -238,34 +229,44 @@ pub fn card_drop_system(
                     }
                 }
                 
-                println!("STACK DEBUG: Total stack size: {} (selected card + {} stacked cards)", stack_cards.len(), cards_to_move.len());
             }
             
-            // Check if trying to drop on stock pile or waste pile (prevent this)
+            // CRITICAL: Prevent cards from being dropped on stock pile or waste pile
+            // Cards can NEVER be stacked on waste or stock piles in solitaire
             let stock_x = -(6.0 * 100.0) / 2.0 + (6.0 * 100.0); // Above Stack 7 (x = 300)
             let stock_y = WINDOW_HEIGHT / 2.0 - 100.0; // Above the tableau stacks
             let waste_x = -(6.0 * 100.0) / 2.0 + (5.0 * 100.0); // Above Stack 6 (x = 200)
             let waste_y = stock_y;
-            
-            println!("STOCK DEBUG: Stock pile at ({:.1}, {:.1}), Waste pile at ({:.1}, {:.1})", stock_x, stock_y, waste_x, waste_y);
             
             // Check distance to stock pile center
             let stock_distance = (cursor_world_pos - Vec2::new(stock_x, stock_y)).length();
             // Check distance to waste pile center  
             let waste_distance = (cursor_world_pos - Vec2::new(waste_x, waste_y)).length();
             
-            if stock_distance < 50.0 || waste_distance < 50.0 {
+            // Use the utility function to check if we're in waste/stock areas
+            if is_in_waste_or_stock_area(cursor_world_pos) {
                 // Don't allow dropping on stock pile or waste pile - snap back to original position
-                println!("STOCK DEBUG: Blocking drop - stock_distance: {:.1}, waste_distance: {:.1}, cursor: ({:.1}, {:.1}), stock_pos: ({:.1}, {:.1})", 
-                    stock_distance, waste_distance, cursor_world_pos.x, cursor_world_pos.y, stock_x, stock_y);
                 if let Ok(mut transform) = draggable_transform_query.get_mut(selected_entity) {
                     transform.translation = original_position;
+                }
+                
+                // Also snap back any stacked cards
+                for (card_entity, stack_index) in &cards_to_move {
+                    if let Ok(mut card_transform) = draggable_transform_query.get_mut(*card_entity) {
+                        let original_stacked_y = original_position.y - (*stack_index as f32 * 30.0);
+                        let original_stacked_z = original_position.z + *stack_index as f32 + 1.0;
+                        let original_stacked_pos = Vec3::new(
+                            original_position.x,
+                            original_stacked_y,
+                            original_stacked_z
+                        );
+                        card_transform.translation = original_stacked_pos;
+                        commands.entity(*card_entity).insert(OriginalPosition(original_stacked_pos));
+                    }
                 }
                 return;
             }
             
-            println!("STOCK DEBUG: Allowing drop - stock_distance: {:.1}, waste_distance: {:.1}, cursor: ({:.1}, {:.1})", 
-                stock_distance, waste_distance, cursor_world_pos.x, cursor_world_pos.y);
             
             // If the selected card is a waste card being moved to tableau, remove waste pile components
             // Check if this card was in the waste pile
@@ -285,26 +286,22 @@ pub fn card_drop_system(
             let foundation_start_x = -(6.0 * 100.0) / 2.0; // Same starting X as tableau stacks
             let foundation_y = WINDOW_HEIGHT / 2.0 - 100.0; // Above the tableau stacks
             
-            println!("FOUNDATION DEBUG: Foundation start X: {:.1}, Y: {:.1}", foundation_start_x, foundation_y);
-            println!("FOUNDATION DEBUG: Cursor world position: ({:.1}, {:.1})", cursor_world_pos.x, cursor_world_pos.y);
             
             // Only allow foundation pile placement if cursor is actually near the foundation pile Y position
-            if (cursor_world_pos.y - foundation_y).abs() < 250.0 {
-                println!("FOUNDATION DEBUG: Cursor Y position ({:.1}) is within range of foundation Y ({:.1})", cursor_world_pos.y, foundation_y);
+            // Also ensure we're not near waste or stock pile areas
+            if (cursor_world_pos.y - foundation_y).abs() < 250.0 
+                && !is_in_waste_or_stock_area(cursor_world_pos) {
                 for i in 0..4 {
                     let foundation_x = foundation_start_x + (i as f32 * 100.0);
                     let foundation_distance = (cursor_world_pos - Vec2::new(foundation_x, foundation_y)).length();
                     
-                                            println!("FOUNDATION DEBUG: Foundation {} at ({:.1}, {:.1}), distance: {:.1}, threshold: 120.0", i, foundation_x, foundation_y, foundation_distance);
                     
                     // Use a larger detection radius for foundation piles to make them reachable
                     if foundation_distance < 120.0 { // Increased from 60.0 to make foundations reachable
-                        println!("FOUNDATION DEBUG: Foundation {} is within range!", i);
                         // Check if this card can be placed on this foundation pile
                         if let Ok(card_data) = card_data_query.get(selected_entity) {
                             let foundation_pile = &foundation_piles.0[i];
                             
-                            println!("FOUNDATION DEBUG: Card is {} of {}, foundation pile has {} cards", card_data.value, format!("{:?}", card_data.suit), foundation_pile.len());
                         
                         // Allow foundation placement if:
                         // 1. This is an Ace for empty foundation piles, OR
@@ -312,36 +309,27 @@ pub fn card_drop_system(
                         let can_place_on_foundation = if foundation_pile.is_empty() {
                             // Empty foundation pile - only Aces can be placed via drag
                             let result = card_data.value == 1;
-                            println!("FOUNDATION DEBUG: Empty foundation pile, can_place: {} (card value: {})", result, card_data.value);
                             result
                         } else {
                             // Foundation pile has cards - check if this card can be added
                             let (top_suit, top_value) = foundation_pile.last().unwrap();
                             let is_next_in_sequence = card_data.suit == *top_suit && card_data.value == top_value + 1;
-                            println!("FOUNDATION DEBUG: Non-empty foundation pile, top card: {} of {}, can_place: {} (suit match: {}, value match: {})", 
-                                top_value, format!("{:?}", top_suit), is_next_in_sequence, card_data.suit == *top_suit, card_data.value == top_value + 1);
                             is_next_in_sequence
                         };
                     
                         if can_place_on_foundation {
-                            println!("FOUNDATION DEBUG: Setting foundation as best target!");
                             best_target = Some((Vec3::new(foundation_x, foundation_y, 1.0), 0.0, "foundation"));
                             break;
                         } else {
-                            println!("FOUNDATION DEBUG: Foundation placement not allowed");
                         }
                         } else {
-                            println!("FOUNDATION DEBUG: Could not get card data for selected entity");
                         } // Close the if let Ok(card_data) block
                     } else {
-                        println!("FOUNDATION DEBUG: Foundation {} is too far away", i);
                     }
                     // Don't break here - continue checking other foundation piles
                     // Only break if we found a valid target
                 }
             } else {
-                println!("FOUNDATION DEBUG: Cursor Y position ({:.1}) is too far from foundation Y ({:.1}), difference: {:.1}", 
-                    cursor_world_pos.y, foundation_y, (cursor_world_pos.y - foundation_y).abs());
             }
             
             // Foundation pile validation is already handled above
@@ -355,7 +343,6 @@ pub fn card_drop_system(
                         let distance = (cursor_world_pos - tableau_pos.truncate()).length();
                         if distance < 50.0 { // Within reasonable distance
                             target_tableau_pos = Some(*tableau_pos);
-                            println!("EMPTY TABLEAU DEBUG: Found empty tableau pile at ({:.1}, {:.1}) for King", tableau_pos.x, tableau_pos.y);
                             break;
                         }
                     }
@@ -370,61 +357,21 @@ pub fn card_drop_system(
                         // VALIDATION: The selected card must be one value lower than the target
                         // In Solitaire: place a 5 on a 6, place a 4 on a 5, etc.
                         if selected_value != target_value - 1 {
-                            println!("VALIDATION DEBUG: Value mismatch - selected: {}, target: {}, expected: {}", selected_value, target_value, target_value - 1);
                             continue; // Skip invalid tableau placements
                         }
                         
                         // Check if colors alternate (red on black, black on red)
-                        let selected_is_red = matches!(selected_suit, CardSuit::Hearts | CardSuit::Diamonds);
-                        let target_is_red = matches!(target_suit, CardSuit::Hearts | CardSuit::Diamonds);
-                        
-                        if selected_is_red == target_is_red {
-                            println!("VALIDATION DEBUG: Color mismatch - both cards are {}", if selected_is_red { "red" } else { "black" });
+                        if is_red_suit(selected_suit) == is_red_suit(*target_suit) {
                             continue; // Colors are the same - this placement is invalid
                         }
                         
-                        println!("VALIDATION DEBUG: Valid placement detected! Selected {} of {} ({}), Target {} of {} ({}), Stack size: {}", 
-                            selected_value, format!("{:?}", selected_suit), if selected_is_red { "red" } else { "black" },
-                            target_value, format!("{:?}", target_suit), if target_is_red { "red" } else { "black" },
-                            stack_cards.len());
                         
                         // STACK VALIDATION: Validate the entire stack structure
                         if stack_cards.len() > 1 {
-                            // For stacks, we need to validate that the entire stack is in valid sequence
-                            let mut is_valid_stack = true;
-                            let mut sorted_stack = stack_cards.clone();
-                            sorted_stack.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by value descending
-                            
-                            // Check if the stack is in valid sequence (descending order with alternating colors)
-                            for i in 0..sorted_stack.len() - 1 {
-                                let current = sorted_stack[i];
-                                let next = sorted_stack[i + 1];
-                                
-                                // Check descending order
-                                if current.1 != next.1 + 1 {
-                                    is_valid_stack = false;
-                                    println!("STACK VALIDATION DEBUG: Invalid sequence - {} not followed by {}", current.1, next.1);
-                                    break;
-                                }
-                                
-                                // Check alternating colors
-                                let current_is_red = matches!(current.0, CardSuit::Hearts | CardSuit::Diamonds);
-                                let next_is_red = matches!(next.0, CardSuit::Hearts | CardSuit::Diamonds);
-                                if current_is_red == next_is_red {
-                                    is_valid_stack = false;
-                                    println!("STACK VALIDATION DEBUG: Invalid colors - both {} and {} are {}", 
-                                        current.1, next.1, if current_is_red { "red" } else { "black" });
-                                    break;
-                                }
-                            }
-                            
-                            if !is_valid_stack {
-                                println!("STACK VALIDATION DEBUG: Invalid stack structure, blocking movement");
+                            if !is_valid_stack_sequence(&stack_cards) {
                                 continue; // Skip invalid stack placements
                             }
                             
-                            println!("STACK DEBUG: Valid stack of {} cards, top card is {} of {}", 
-                                stack_cards.len(), selected_value, format!("{:?}", selected_suit));
                         }
                         
                         // The target is already validated as available during the initial collection phase
@@ -433,11 +380,9 @@ pub fn card_drop_system(
                         if let Some((_target_pos, current_distance, _target_type)) = best_target {
                             if *distance < current_distance {
                                 best_target = Some((*target_pos, *distance, "tableau"));
-                                println!("TARGET SELECTION DEBUG: Updated best target to tableau at ({:.1}, {:.1}) with distance {:.1}", target_pos.x, target_pos.y, distance);
                             }
                         } else {
                             best_target = Some((*target_pos, *distance, "tableau"));
-                            println!("TARGET SELECTION DEBUG: Set best target to tableau at ({:.1}, {:.1}) with distance {:.1}", target_pos.x, target_pos.y, distance);
                         }
                     }
                 }
@@ -449,8 +394,6 @@ pub fn card_drop_system(
             // Now get the selected card data and apply the movement
             if let Ok(mut transform) = draggable_transform_query.get_mut(selected_entity) {
                 if let Some((target_pos, _distance, target_type)) = best_target {
-                    println!("MOVEMENT DEBUG: Attempting placement on {} at ({:.1}, {:.1})", target_type, target_pos.x, target_pos.y);
-                    println!("MOVEMENT DEBUG: Selected card: {} of {}, Stack size: {}", selected_value, format!("{:?}", selected_suit), stack_cards.len());
                     if target_type == "foundation" {
                         // Placing on foundation pile - SIMPLIFIED LOGIC
                         let foundation_start_x = -(6.0 * 100.0) / 2.0;
@@ -478,7 +421,6 @@ pub fn card_drop_system(
                         // Foundation placement: Only the top card goes to foundation
                         // VALIDATION: Only single cards can be placed on foundation piles
                         if cards_to_move.len() > 0 {
-                            println!("FOUNDATION DEBUG: Cannot place stack on foundation - only single cards allowed");
                             // Snap back to original position
                             transform.translation = original_position;
                             
@@ -499,7 +441,6 @@ pub fn card_drop_system(
                             }
                             // Don't return here - continue to the end to ensure proper cleanup
                         } else {
-                            println!("FOUNDATION DEBUG: Placing single card on foundation pile");
                             
                             // Remove tableau/waste/stock components and add foundation component
                             commands.entity(selected_entity)
@@ -515,7 +456,6 @@ pub fn card_drop_system(
                         // Empty tableau placement: Only Kings can be placed on empty tableau positions
                         // VALIDATION: Check if the selected card is a King
                         if selected_value != 13 { // 13 = King
-                            println!("EMPTY TABLEAU DEBUG: Cannot place {} on empty tableau - only Kings allowed", selected_value);
                             // Snap back to original position
                             transform.translation = original_position;
                             
@@ -537,7 +477,6 @@ pub fn card_drop_system(
                             return; // Skip this movement
                         }
                         
-                        println!("EMPTY TABLEAU DEBUG: Placing King on empty tableau position");
                         
                         // Position the selected card at the empty tableau position
                         let new_position = Vec3::new(target_pos.x, target_pos.y, target_pos.z);
@@ -547,7 +486,6 @@ pub fn card_drop_system(
                         commands.entity(selected_entity).insert(OriginalPosition(new_position));
                         
                         // Move all stacked cards to maintain their relative positions with proper stacking
-                        println!("EMPTY TABLEAU DEBUG: Moving {} stacked cards", cards_to_move.len());
                         for (card_entity, stack_index) in &cards_to_move {
                             // Use stacking offset: 30 pixels per card to show enough of each card
                             let stacked_y = new_position.y - (*stack_index as f32 * 30.0);
@@ -558,14 +496,11 @@ pub fn card_drop_system(
                                 new_position.z + *stack_index as f32 + 2.0 // +2.0 to ensure proper layering above the target card
                             );
                             
-                            println!("EMPTY TABLEAU DEBUG: Moving stacked card {} to ({:.1}, {:.1}, {:.1})", stack_index, new_card_position.x, new_card_position.y, new_card_position.z);
                             
                             // Update the transform directly for stacked cards
                             if let Ok(mut card_transform) = draggable_transform_query.get_mut(*card_entity) {
                                 card_transform.translation = new_card_position;
-                                println!("EMPTY TABLEAU DEBUG: Successfully moved stacked card {} transform", stack_index);
                             } else {
-                                println!("EMPTY TABLEAU DEBUG: Failed to get transform for stacked card {}", stack_index);
                             }
                             
                             commands.entity(*card_entity).insert(OriginalPosition(new_card_position));
@@ -585,7 +520,6 @@ pub fn card_drop_system(
                     } else {
                         // Placing on tableau
                         
-                        println!("MOVEMENT DEBUG: Executing tableau placement at ({:.1}, {:.1})", target_pos.x, target_pos.y);
                         
                         // CRITICAL: Validate that this placement is actually legal
                         // The card must be one value lower than the target AND have alternating colors
@@ -593,8 +527,6 @@ pub fn card_drop_system(
                         if let Some((_target_pos, _distance, _target_type)) = best_target {
                             // Validation is already done in the target selection loop above
                             // This is just a safety check
-                            println!("LEGAL MOVE DEBUG: Valid placement confirmed - {} of {} on target", 
-                                selected_value, format!("{:?}", selected_suit));
                         }
                         
                         // Basic validation: only check if the top card can be placed on the target
@@ -609,7 +541,6 @@ pub fn card_drop_system(
                         commands.entity(selected_entity).insert(OriginalPosition(new_position));
                         
                         // Move all stacked cards to maintain their relative positions with proper stacking
-                        println!("MOVEMENT DEBUG: Moving {} stacked cards", cards_to_move.len());
                         for (card_entity, stack_index) in &cards_to_move {
                             // Use stacking offset: 30 pixels per card to show enough of each card
                             let stacked_y = new_position.y - (*stack_index as f32 * 30.0);
@@ -620,14 +551,11 @@ pub fn card_drop_system(
                                 new_position.z + *stack_index as f32 + 2.0 // +2.0 to ensure proper layering above the target card
                             );
                             
-                            println!("MOVEMENT DEBUG: Moving stacked card {} to ({:.1}, {:.1}, {:.1})", stack_index, new_card_position.x, new_card_position.y, new_card_position.z);
                             
                             // Update the transform directly for stacked cards
                             if let Ok(mut card_transform) = draggable_transform_query.get_mut(*card_entity) {
                                 card_transform.translation = new_card_position;
-                                println!("MOVEMENT DEBUG: Successfully moved stacked card {} transform", stack_index);
                             } else {
-                                println!("MOVEMENT DEBUG: Failed to get transform for stacked card {}", stack_index);
                             }
                             
                             commands.entity(*card_entity).insert(OriginalPosition(new_card_position));
@@ -653,8 +581,6 @@ pub fn card_drop_system(
                                 if selected_card_data.is_face_up {
                                     // Create a separate entity to trigger the flip system
                                     // This avoids the issue of adding the component to the moved card
-                                    println!("FLIP DEBUG: Creating flip trigger for face-up card {} of {} at ORIGINAL position ({:.1}, {:.1})", 
-                                        selected_card_data.value, format!("{:?}", selected_card_data.suit), original_position.x, original_position.y);
                                     commands.spawn(NeedsFlipUnderneath(original_position));
                                 }
                             }
@@ -730,8 +656,6 @@ pub fn card_drop_system(
                             if selected_card_data.is_face_up {
                                 // Create a separate entity to trigger the flip system
                                 // This avoids the issue of adding the component to the moved card
-                                println!("FLIP DEBUG: Creating flip trigger for face-up card {} of {} at ORIGINAL position ({:.1}, {:.1})", 
-                                    selected_card_data.value, format!("{:?}", selected_card_data.suit), original_position.x, original_position.y);
                                 commands.spawn(NeedsFlipUnderneath(original_position));
                             }
                         }

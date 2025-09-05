@@ -1,7 +1,4 @@
 use bevy::prelude::*;
-use bevy::input::ButtonInput;
-use bevy::input::mouse::MouseButton;
-use bevy::input::keyboard::KeyCode;
 use crate::components::*;
 use crate::utils::get_card_back_image;
 use crate::card_entity::create_card_entity;

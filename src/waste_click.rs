@@ -1,9 +1,8 @@
 use bevy::prelude::*;
 use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
-use bevy::input::keyboard::KeyCode;
 use crate::components::*;
-use crate::utils::{get_card_back_image, can_place_on_card};
+use crate::utils::{can_place_on_tableau, is_in_waste_or_stock_area};
 
 
 
@@ -86,103 +85,100 @@ pub fn waste_card_click_system(
                     continue;
                 }
                 
-                // CRITICAL: Basic validation - card value must be one lower than target
-                if waste_card_data.value != tableau_card_data.value - 1 {
-                    continue; // Skip invalid placements
+                // CRITICAL: Prevent placing cards on waste or stock pile areas
+                if is_in_waste_or_stock_area(tableau_transform.translation.truncate()) {
+                    continue;
                 }
                 
                 // Check if this is a valid placement (card value must be one lower AND colors must alternate)
-                if can_place_on_card(waste_card_data.value, tableau_card_data.value) {
-                    // Additional check: colors must alternate (red on black, black on red)
-                    let waste_is_red = matches!(waste_card_data.suit, CardSuit::Hearts | CardSuit::Diamonds);
-                    let tableau_is_red = matches!(tableau_card_data.suit, CardSuit::Hearts | CardSuit::Diamonds);
+                if can_place_on_tableau(waste_card_data.value, waste_card_data.suit, tableau_card_data.value, tableau_card_data.suit) {
+                    // Additional check: make sure we're not placing on a card that's already covered
+                    // Only place on the top card of each stack
+                    let mut is_top_card = true;
+                    for (other_entity, other_transform, _card_data) in tableau_cards.iter() {
+                        if other_entity != _tableau_entity {
+                            // Check if this other card is on top of our target
+                            let x_same = (other_transform.translation.x - tableau_transform.translation.x).abs() < 5.0;
+                            let y_same = (other_transform.translation.y - tableau_transform.translation.y).abs() < 5.0;
+                            let z_higher = other_transform.translation.z > tableau_transform.translation.z;
+                            
+                            if x_same && y_same && z_higher {
+                                is_top_card = false;
+                                break;
+                            }
+                        }
+                    }
                     
-                    // Debug: Print suit compatibility information
+                    // Additional check: prevent placing waste card on its own stack
+                    let mut is_valid_target = true;
+                    let waste_x = waste_transform.translation.x;
+                    let waste_y = waste_transform.translation.y;
+                    let tableau_x = tableau_transform.translation.x;
+                    let tableau_y = tableau_transform.translation.y;
                     
-                    if waste_is_red != tableau_is_red { // Colors must be different
-                        // Additional check: make sure we're not placing on a card that's already covered
-                        // Only place on the top card of each stack
-                        let mut is_top_card = true;
-                        for (other_entity, other_transform, _card_data) in tableau_cards.iter() {
-                            if other_entity != _tableau_entity {
-                                // Check if this other card is on top of our target
-                                let x_same = (other_transform.translation.x - tableau_transform.translation.x).abs() < 5.0;
-                                let y_same = (other_transform.translation.y - tableau_transform.translation.y).abs() < 5.0;
-                                let z_higher = other_transform.translation.z > tableau_transform.translation.z;
+                    if (waste_x - tableau_x).abs() < 5.0 && (waste_y - tableau_y).abs() < 5.0 {
+                        // This would place the waste card on its own stack - not allowed
+                        is_valid_target = false;
+                    }
+                    
+                    // Additional check: prevent placing cards with duplicate values in the same stack
+                    let mut has_duplicate_value = false;
+                    let mut is_already_in_stack = false;
+                    let mut stack_values = Vec::new();
+                    
+                    // First, collect all values already in the target stack
+                    for (other_entity, other_transform, other_card_data) in tableau_cards.iter() {
+                        if other_entity != _tableau_entity {
+                            let x_same = (other_transform.translation.x - tableau_x).abs() < 5.0;
+                            let y_same = (other_transform.translation.y - tableau_y).abs() < 5.0;
+                            if x_same && y_same {
+                                stack_values.push(other_card_data.value);
                                 
-                                if x_same && y_same && z_higher {
-                                    is_top_card = false;
+                                // Check if this card has the same value as the waste card
+                                if other_card_data.value == waste_card_data.value {
+                                    has_duplicate_value = true;
+                                    break;
+                                }
+                                
+                                // Check if this is the same card (same suit and value)
+                                if other_card_data.suit == waste_card_data.suit && 
+                                   other_card_data.value == waste_card_data.value {
+                                    is_already_in_stack = true;
                                     break;
                                 }
                             }
                         }
+                    }
+                    
+                    // Also check if the waste card's value already exists in the target stack
+                    if stack_values.contains(&waste_card_data.value) {
+                        has_duplicate_value = true;
+                    }
+                    
+                    if is_top_card && is_valid_target && !has_duplicate_value && !is_already_in_stack {
+                        let distance = (waste_transform.translation - tableau_transform.translation).length();
                         
-                        // Additional check: prevent placing waste card on its own stack
-                        let mut is_valid_target = true;
-                        let waste_x = waste_transform.translation.x;
-                        let waste_y = waste_transform.translation.y;
-                        let tableau_x = tableau_transform.translation.x;
-                        let tableau_y = tableau_transform.translation.y;
-                        
-                        if (waste_x - tableau_x).abs() < 5.0 && (waste_y - tableau_y).abs() < 5.0 {
-                            // This would place the waste card on its own stack - not allowed
-                            is_valid_target = false;
-                        }
-                        
-                        // Additional check: prevent placing cards with duplicate values in the same stack
-                        let mut has_duplicate_value = false;
-                        let mut is_already_in_stack = false;
-                        let mut stack_values = Vec::new();
-                        
-                        // First, collect all values already in the target stack
-                        for (other_entity, other_transform, other_card_data) in tableau_cards.iter() {
-                            if other_entity != _tableau_entity {
-                                let x_same = (other_transform.translation.x - tableau_x).abs() < 5.0;
-                                let y_same = (other_transform.translation.y - tableau_y).abs() < 5.0;
-                                if x_same && y_same {
-                                    stack_values.push(other_card_data.value);
-                                    
-                                    // Check if this card has the same value as the waste card
-                                    if other_card_data.value == waste_card_data.value {
-                                        has_duplicate_value = true;
-                                        break;
-                                    }
-                                    
-                                    // Check if this is the same card (same suit and value)
-                                    if other_card_data.suit == waste_card_data.suit && 
-                                       other_card_data.value == waste_card_data.value {
-                                        is_already_in_stack = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Also check if the waste card's value already exists in the target stack
-                        if stack_values.contains(&waste_card_data.value) {
-                            has_duplicate_value = true;
-                        }
-                        
-                        if is_top_card && is_valid_target && !has_duplicate_value && !is_already_in_stack {
-                            let distance = (waste_transform.translation - tableau_transform.translation).length();
-                            
-                            if let Some((_target_pos, current_distance)) = best_target {
-                                if distance < current_distance {
-                                    best_target = Some((tableau_transform.translation, distance));
-                                }
-                            } else {
+                        if let Some((_target_pos, current_distance)) = best_target {
+                            if distance < current_distance {
                                 best_target = Some((tableau_transform.translation, distance));
                             }
+                        } else {
+                            best_target = Some((tableau_transform.translation, distance));
                         }
                     }
-                            } // Close the if waste_is_red != tableau_is_red block
-        } // Close the if can_place_on_card block
+                }
+            }
         
         // If no valid foundation pile found, check if it can be placed on empty tableau piles
         if best_target.is_none() {
             // Only Kings can be placed on empty tableau piles
             if waste_card_data.value == 13 {
                 for tableau_pos in &tableau_positions.0 {
+                    // CRITICAL: Prevent placing on waste or stock pile areas
+                    if is_in_waste_or_stock_area(tableau_pos.truncate()) {
+                        continue;
+                    }
+                    
                     // Check if this tableau position is empty
                     let mut is_empty = true;
                     for (_entity, tableau_transform, _card_data) in tableau_cards.iter() {
