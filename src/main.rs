@@ -1,12 +1,31 @@
 mod components;
 mod utils;
 mod setup;
-mod systems;
+mod init_setup;
+mod card_drag_sys;
+mod card_drop_sys;
+mod card_flip_sys;
+mod card_entity;
+mod foundation_auto;
+mod foundation_click;
+mod stock_click;
+mod undo;
+mod visual_stacking;
+mod waste_click;
 
 use bevy::prelude::*;
 use components::*;
 use setup::setup_game;
-use systems::*;
+use card_drag_sys::*;
+use card_drop_sys::*;
+use card_flip_sys::*;
+use card_entity::*;
+use foundation_auto::*;
+use foundation_click::*;
+use stock_click::*;
+use undo::*;
+use visual_stacking::*;
+use waste_click::*;
 
 fn main() {
     App::new()

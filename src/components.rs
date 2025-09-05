@@ -105,6 +105,7 @@ pub struct UndoAction {
     pub from_components: Vec<ComponentType>,
     pub to_components: Vec<ComponentType>,
     pub stack_cards: Vec<(Entity, Vec3)>, // For moving entire stacks
+    pub original_face_up: bool, // Track the original face up/down state
 }
 
 #[derive(Clone, PartialEq)]

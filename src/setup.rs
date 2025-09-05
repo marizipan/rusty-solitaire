@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use crate::components::*;
 
-use crate::systems::setup_initial_tableau_and_stock;
+use crate::init_setup::setup_initial_tableau_and_stock;
 
 pub fn setup_game(mut commands: Commands, asset_server: Res<AssetServer>, stock_cards: ResMut<StockCards>) {
     
