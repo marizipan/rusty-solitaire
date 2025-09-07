@@ -46,7 +46,7 @@ fn main() {
                 waste_card_click_system, // Handle waste pile card clicks
                 double_click_foundation_system, // Move cards to foundation piles on double-click
                 undo_button_system, // Handle undo button clicks
-                // Unified drag and drop system
+                // Unified drag and drop system (handles both drag-and-drop and double-clicks)
                 card_drag_drop_system,
             ),
         )

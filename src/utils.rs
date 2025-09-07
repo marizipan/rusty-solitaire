@@ -144,8 +144,8 @@ pub fn is_valid_stack_sequence(cards: &[(CardSuit, u8)]) -> bool {
         let current = sorted_cards[i];
         let next = sorted_cards[i + 1];
         
-        // Check descending order (current value should be higher than next)
-        if current.1 <= next.1 {
+        // Check descending order (current value should be exactly one higher than next)
+        if current.1 != next.1 + 1 {
             return false;
         }
         
@@ -207,11 +207,22 @@ pub fn can_place_on_foundation(card_data: &crate::components::CardData, foundati
 pub fn can_place_on_tableau_card(selected_card: &crate::components::CardData, target_card: &crate::components::CardData) -> bool {
     // Target card must be face up
     if !target_card.is_face_up {
+        tracing::debug!("TABLEAU REJECTED: Target card is face down");
         return false;
     }
     
     // Use the existing validation function from utils
-    can_place_on_tableau(selected_card.value, selected_card.suit, target_card.value, target_card.suit)
+    let can_place = can_place_on_tableau(selected_card.value, selected_card.suit, target_card.value, target_card.suit);
+    
+    if !can_place {
+        tracing::debug!("TABLEAU REJECTED: Card {:?} (value: {}, suit: {:?}) cannot be placed on {:?} (value: {}, suit: {:?}) - same color: {}, valid sequence: {}", 
+                       selected_card.suit, selected_card.value, selected_card.suit,
+                       target_card.suit, target_card.value, target_card.suit,
+                       is_red_suit(selected_card.suit) == is_red_suit(target_card.suit),
+                       can_place_on_card(selected_card.value, target_card.value));
+    }
+    
+    can_place
 }
 
 /// Finds the best tableau target for a card, reusing logic from waste_click.rs
@@ -240,6 +251,10 @@ pub fn find_best_tableau_target(
         
         // Check if this is a valid placement
         if can_place_on_tableau_card(card_data, target_card_data) {
+            tracing::debug!("TABLEAU VALID: Card {:?} (value: {}, suit: {:?}) can be placed on {:?} (value: {}, suit: {:?})", 
+                           card_data.suit, card_data.value, card_data.suit,
+                           target_card_data.suit, target_card_data.value, target_card_data.suit);
+            
             // Check if this is the top card of its stack
             let mut is_top_card = true;
             for (other_entity, other_transform, _other_card_data) in tableau_cards.iter() {

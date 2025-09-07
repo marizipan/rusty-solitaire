@@ -36,16 +36,26 @@ pub fn find_valid_drop_target(
 
 /// Finds foundation pile targets with proper validation
 pub fn find_foundation_target(cursor_pos: Vec2, foundation_piles: &FoundationPiles, card_data: &CardData) -> Option<Vec3> {
-    let foundation_start_x = -(6.0 * 100.0) / 2.0;
-    let foundation_y = WINDOW_HEIGHT / 2.0 - 100.0;
+    let foundation_y = WINDOW_HEIGHT / 2.0 - 100.0; // This is 260
     
-    // Check if cursor is near foundation area (more lenient)
-    if (cursor_pos.y - foundation_y).abs() > 100.0 {
+    // Foundation piles are at x positions: -150, -50, 50, 150
+    // Waste pile is at x=0, y=260
+    // Only consider foundation area if NOT in waste pile area
+    let waste_pile_x_range = cursor_pos.x >= -50.0 && cursor_pos.x <= 50.0;
+    let foundation_y_range = cursor_pos.y >= foundation_y - 50.0 && cursor_pos.y <= foundation_y + 50.0;
+    
+    // Exclude waste pile area from foundation detection
+    if waste_pile_x_range && foundation_y_range {
+        return None;
+    }
+    
+    // Only check foundation if cursor is in foundation area (not tableau area)
+    if !foundation_y_range {
         return None;
     }
 
     for i in 0..4 {
-        let foundation_x = foundation_start_x + (i as f32 * 100.0);
+        let foundation_x = -150.0 + (i as f32 * 100.0);
         let foundation_distance = (cursor_pos - Vec2::new(foundation_x, foundation_y)).length();
         
         if foundation_distance < 80.0 {
@@ -86,17 +96,33 @@ pub fn find_tableau_target(
             
             debug!("Checking entity at {:?}, distance: {:.2}, y: {:.2}", target_pos, distance, target_pos.y);
             
-            // Consider all cards for tableau moves (including waste pile cards)
+            // Exclude waste pile area from tableau detection
+            // Waste pile is at x=0, y=260, foundation piles are at x=-150, -50, 50, 150, y=260
+            let waste_pile_x_range = target_pos.x >= -50.0 && target_pos.x <= 50.0;
+            let foundation_y = WINDOW_HEIGHT / 2.0 - 100.0; // This is 260
+            let foundation_y_range = target_pos.y >= foundation_y - 50.0 && target_pos.y <= foundation_y + 50.0;
+            
+            // Skip waste pile cards (they should only be targets for foundation moves, not tableau moves)
+            if waste_pile_x_range && foundation_y_range {
+                debug!("Skipping waste pile card at {:?}", target_pos);
+                continue;
+            }
+            
+            // Consider all other cards for tableau moves
             if distance < 80.0 && distance < best_distance {
                 // Check if this card can be placed on the target card
                 if let Ok(target_card_data) = card_data_query.get(entity) {
                     debug!("Target card: suit={:?}, value={}, face_up: {}", target_card_data.suit, target_card_data.value, target_card_data.is_face_up);
                     if can_place_on_tableau_card(selected_card_data, target_card_data) {
-                        debug!("Valid tableau target found!");
+                        debug!("DRAG VALID: Card {:?} (value: {}, suit: {:?}) can be placed on {:?} (value: {}, suit: {:?})", 
+                               selected_card_data.suit, selected_card_data.value, selected_card_data.suit,
+                               target_card_data.suit, target_card_data.value, target_card_data.suit);
                         best_target = Some(target_pos);
                         best_distance = distance;
                     } else {
-                        debug!("Invalid tableau placement");
+                        debug!("DRAG INVALID: Card {:?} (value: {}, suit: {:?}) cannot be placed on {:?} (value: {}, suit: {:?})", 
+                               selected_card_data.suit, selected_card_data.value, selected_card_data.suit,
+                               target_card_data.suit, target_card_data.value, target_card_data.suit);
                     }
                 }
             }

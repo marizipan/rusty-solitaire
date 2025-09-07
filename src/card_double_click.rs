@@ -26,17 +26,17 @@ pub fn try_foundation_move_simple(
         debug!("FOUNDATION PLACEMENT: Card {:?} (value: {}, suit: {:?}) can be placed on foundation pile {}", 
                card_data.suit, card_data.value, card_data.suit, foundation_index);
         
-        // Calculate foundation pile position
-        let foundation_start_x = -(6.0 * 100.0) / 2.0;
-        let foundation_x = foundation_start_x + (foundation_index as f32 * 100.0);
-        let foundation_y = WINDOW_HEIGHT / 2.0 - 100.0;
-        
-        // Store original position for flip trigger
+        // Store original position before moving
         let original_position = if let Ok(transform) = transform_query.get(entity) {
             transform.translation
         } else {
             return false;
         };
+        
+        // Calculate foundation pile position
+        let foundation_start_x = -(6.0 * 100.0) / 2.0;
+        let foundation_x = foundation_start_x + (foundation_index as f32 * 100.0);
+        let foundation_y = WINDOW_HEIGHT / 2.0 - 100.0;
         
         // Move the card to the foundation pile
         let foundation_pos = Vec3::new(foundation_x, foundation_y, foundation_pile.len() as f32 + 1.0);
@@ -57,7 +57,7 @@ pub fn try_foundation_move_simple(
             .insert(FoundationPile)
             .insert(OriginalPosition(foundation_pos));
         
-        // Trigger card flipping for face-down cards underneath
+        // Trigger card flipping for face-down cards underneath (use original position)
         commands.spawn(NeedsFlipUnderneath(original_position));
         
         true
@@ -78,17 +78,17 @@ pub fn try_tableau_move_simple(
     tableau_positions: &[Vec3],
     commands: &mut Commands,
 ) -> bool {
+    // Store original position before moving
+    let original_position = if let Ok(transform) = transform_query.get(entity) {
+        transform.translation
+    } else {
+        return false;
+    };
+    
     // Use existing validation logic from utils.rs
-    if let Some(target_pos) = find_best_tableau_target(card_data, transform_query.get(entity).unwrap().translation, tableau_cards, tableau_positions, Some(entity)) {
+    if let Some(target_pos) = find_best_tableau_target(card_data, original_position, tableau_cards, tableau_positions, Some(entity)) {
         debug!("TABLEAU PLACEMENT: Card {:?} (value: {}, suit: {:?}) can be placed on tableau at {:?}", 
                card_data.suit, card_data.value, card_data.suit, target_pos);
-        
-        // Store original position for flip trigger
-        let original_position = if let Ok(transform) = transform_query.get(entity) {
-            transform.translation
-        } else {
-            return false;
-        };
         
         // Check if it's on an existing card or empty pile
         let mut is_on_existing_card = false;
@@ -126,7 +126,7 @@ pub fn try_tableau_move_simple(
             .insert(OriginalPosition(new_position))
             .insert(Draggable);
         
-        // Trigger card flipping for face-down cards underneath
+        // Trigger card flipping for face-down cards underneath (use original position)
         commands.spawn(NeedsFlipUnderneath(original_position));
         
         true

@@ -241,6 +241,7 @@ pub fn waste_card_click_system(
                         
                         // Update the transform
                         commands.entity(waste_entity).insert(Transform::from_translation(new_position));
+                        
                     } else {
                         // Placing on empty tableau pile
                         let new_position = Vec3::new(target_pos.x, target_pos.y, target_pos.z);
@@ -255,6 +256,7 @@ pub fn waste_card_click_system(
                         
                         // Update the transform
                         commands.entity(waste_entity).insert(Transform::from_translation(new_position));
+                        
                     }
                 }
                 

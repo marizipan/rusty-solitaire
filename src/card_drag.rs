@@ -141,8 +141,13 @@ pub fn card_drag_drop_system(
                 // Try to place the card with proper validation
                 if let Some(target_pos) = find_valid_drop_target(cursor_world_pos, selected_entity, &foundation_piles, &entity_query, &transform_query, &card_data_query) {
                     debug!("Valid drop target found at: {:?}", target_pos);
-                    place_card(&mut commands, &mut foundation_piles, selected_entity, target_pos, &card_data_query);
-                    // Clean up the stored position since placement was successful
+                    
+                    // Get the original position for flip trigger (where the card was dragged from)
+                    let original_position = original_positions.get(&selected_entity).copied().unwrap_or(Vec3::ZERO);
+                    
+                    // Use the target position for placement and original position for flip trigger
+                    place_card(&mut commands, &mut foundation_piles, selected_entity, target_pos, original_position, &card_data_query);
+                    // Clean up the stored position after placement
                     original_positions.remove(&selected_entity);
                 } else {
                     debug!("No valid drop target found - snapping back");

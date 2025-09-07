@@ -14,35 +14,38 @@ pub fn flip_cards_system(
     asset_server: Res<AssetServer>,
 ) {
     for (entity, needs_flip) in needs_flip_query.iter() {
-        let original_position = needs_flip.0;
-        debug!("Processing flip trigger at position: {:?}", original_position);
+        let target_position = needs_flip.0;
+        debug!("Processing flip trigger at position: {:?}", target_position);
         
         // Remove the entity immediately to prevent duplicate processing
         commands.entity(entity).despawn();
         
-        // Find face-down cards at the original position that need to be flipped
+        // Find face-down cards at the target position that need to be flipped
         let mut cards_at_position = Vec::new();
         
-        // Collect all cards at the original X,Y position with precise detection
-        debug!("Looking for face-down cards at position: {:?}", original_position);
+        // Collect all cards at the target X,Y position with precise detection
+        debug!("Looking for face-down cards at position: {:?}", target_position);
         for card_entity in all_entity_query.iter() { 
             if let Ok(transform) = all_transform_query.get(card_entity) {
                 if let Ok(card_data) = all_card_data_query.get(card_entity) {
-                    let x_distance = (transform.translation.x - original_position.x).abs();
-                    let y_distance = (transform.translation.y - original_position.y).abs();
-                    
-                    debug!("Checking card at {:?}, face_up: {}, x_dist: {:.2}, y_dist: {:.2}", 
-                           transform.translation, card_data.is_face_up, x_distance, y_distance);
-                    
-                    // Skip cards that have already been flipped
-                    if card_data.is_face_up {
+
+                     // Skip cards that have already been flipped
+                     if card_data.is_face_up {
                         debug!("Skipping face-up card");
                         continue;
                     }
                     
+                    let x_distance = (transform.translation.x - target_position.x).abs();
+                    let y_distance = (transform.translation.y - target_position.y).abs();
+                    
+                    debug!("Checking card at {:?}, face_up: {}, x_dist: {:.2}, y_dist: {:.2}, target: {:?}", 
+                           transform.translation, card_data.is_face_up, x_distance, y_distance, target_position);
+                    
+                   
+                    
                     // Use precise position matching - cards should be at the exact same X,Y position
-                    // Only allow small tolerance for floating point precision
-                    if x_distance < 5.0 && y_distance < 5.0 {
+                    // Only allow small tolerance for floating point precision and slight stacking offsets
+                    if x_distance < 25.0 && y_distance < 80.0 {
                         debug!("Found face-down card at position: {:?}", transform.translation);
                         cards_at_position.push((card_entity, transform.translation.z, card_data));
                     } else {
