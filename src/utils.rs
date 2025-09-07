@@ -213,3 +213,88 @@ pub fn can_place_on_tableau_card(selected_card: &crate::components::CardData, ta
     // Use the existing validation function from utils
     can_place_on_tableau(selected_card.value, selected_card.suit, target_card.value, target_card.suit)
 }
+
+/// Finds the best tableau target for a card, reusing logic from waste_click.rs
+pub fn find_best_tableau_target(
+    card_data: &crate::components::CardData,
+    card_position: bevy::math::Vec3,
+    tableau_cards: &[(bevy::prelude::Entity, bevy::math::Vec3, crate::components::CardData)],
+    tableau_positions: &[bevy::math::Vec3],
+    exclude_entity: Option<bevy::prelude::Entity>,
+) -> Option<bevy::math::Vec3> {
+    let mut best_target: Option<(bevy::math::Vec3, f32)> = None;
+    
+    // First, try to find a valid tableau card to place on
+    for (entity, target_transform, target_card_data) in tableau_cards.iter() {
+        // Skip the excluded entity
+        if let Some(exclude) = exclude_entity {
+            if *entity == exclude {
+                continue;
+            }
+        }
+        
+        // Only consider face-up cards as valid targets
+        if !target_card_data.is_face_up {
+            continue;
+        }
+        
+        // Check if this is a valid placement
+        if can_place_on_tableau_card(card_data, target_card_data) {
+            // Check if this is the top card of its stack
+            let mut is_top_card = true;
+            for (other_entity, other_transform, _other_card_data) in tableau_cards.iter() {
+                if *other_entity != *entity {
+                    if let Some(exclude) = exclude_entity {
+                        if *other_entity == exclude {
+                            continue;
+                        }
+                    }
+                    
+                    // Check if this other card is on top of our target
+                    let x_same = (other_transform.x - target_transform.x).abs() < 5.0;
+                    let y_same = (other_transform.y - target_transform.y).abs() < 5.0;
+                    let z_higher = other_transform.z > target_transform.z;
+                    
+                    if x_same && y_same && z_higher {
+                        is_top_card = false;
+                        break;
+                    }
+                }
+            }
+            
+            if is_top_card {
+                let distance = (card_position - *target_transform).length();
+                
+                if let Some((_target_pos, current_distance)) = best_target {
+                    if distance < current_distance {
+                        best_target = Some((*target_transform, distance));
+                    }
+                } else {
+                    best_target = Some((*target_transform, distance));
+                }
+            }
+        }
+    }
+    
+    // If no valid tableau card found, try empty tableau positions (only for Kings)
+    if best_target.is_none() && card_data.value == 13 {
+        for tableau_pos in tableau_positions {
+            // Check if this tableau position is empty
+            let mut is_empty = true;
+            for (_other_entity, other_transform, _other_card_data) in tableau_cards.iter() {
+                if (other_transform.x - tableau_pos.x).abs() < 5.0 
+                    && (other_transform.y - tableau_pos.y).abs() < 5.0 {
+                    is_empty = false;
+                    break;
+                }
+            }
+            
+            if is_empty {
+                best_target = Some((*tableau_pos, 0.0));
+                break;
+            }
+        }
+    }
+    
+    best_target.map(|(pos, _)| pos)
+}

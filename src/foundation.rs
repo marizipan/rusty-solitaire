@@ -2,7 +2,9 @@ use bevy::prelude::*;
 use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
 use crate::components::*;
+use crate::utils::{can_place_on_tableau_card, find_best_tableau_target};
 
+/// Helper function to move a card to foundation with proper validation
 fn try_move_to_foundation(
     entity: Entity,
     transform: &mut Transform,
@@ -31,10 +33,13 @@ fn try_move_to_foundation(
     };
     
     if can_place {
+        tracing::debug!("FOUNDATION PLACEMENT: Card {:?} (value: {}, suit: {:?}) can be placed on foundation pile {}", 
+                       card_data.suit, card_data.value, card_data.suit, foundation_index);
+        
         // Calculate foundation pile position
         let foundation_start_x = -(6.0 * 100.0) / 2.0;
         let foundation_x = foundation_start_x + (foundation_index as f32 * 100.0);
-        let foundation_y = 260.0; // WINDOW_HEIGHT / 2.0 - 100.0
+        let foundation_y = WINDOW_HEIGHT / 2.0 - 100.0;
         
         // Store original position for flip trigger
         let original_position = transform.translation;
@@ -61,11 +66,30 @@ fn try_move_to_foundation(
         
         true
     } else {
+        tracing::debug!("FOUNDATION REJECTED: Card {:?} (value: {}, suit: {:?}) cannot be placed on foundation pile {} (empty: {}, top: {:?})", 
+                       card_data.suit, card_data.value, card_data.suit, foundation_index, foundation_pile.is_empty(), 
+                       foundation_pile.last());
         false
     }
 }
 
+/// Helper function to move a card to tableau with proper validation
+/// For now, tableau moves are handled by the drag-and-drop system
+fn try_move_to_tableau(
+    _entity: Entity,
+    _transform: &mut Transform,
+    _card_data: &CardData,
+    _commands: &mut Commands,
+    _tableau_cards: &Query<(Entity, &Transform, &CardData), (With<TableauPile>, Without<WastePile>)>,
+    _tableau_positions: &Res<TableauPositions>,
+) -> bool {
+    // Tableau moves are handled by the drag-and-drop system
+    // Double-click should primarily handle foundation moves
+    tracing::debug!("DOUBLE-CLICK: Tableau moves handled by drag-and-drop system");
+    false
+}
 
+/// Double-click system for moving cards to foundation piles
 pub fn double_click_foundation_system(
     mut commands: Commands,
     mouse_input: Res<ButtonInput<MouseButton>>,
@@ -73,9 +97,8 @@ pub fn double_click_foundation_system(
     mut draggable_cards: Query<(Entity, &mut Transform, &CardData), (With<Draggable>, Or<(With<TableauPile>, With<WastePile>)>, Without<SkippedWasteCard>)>,
     mut last_click_time: Local<Option<std::time::Instant>>,
     clicked_entity: Res<ClickedEntity>,
-    tableau_positions: Res<TableauPositions>,
 ) {
-    // Handle double-click detection and auto-move to foundation
+    // Handle double-click detection and move to foundation
     if mouse_input.just_pressed(MouseButton::Left) {
         let now = std::time::Instant::now();
         
@@ -86,14 +109,22 @@ pub fn double_click_foundation_system(
                 
                 // If double-click detected (within 500ms) and same entity
                 if time_diff.as_millis() < 500 {
+                    tracing::debug!("DOUBLE-CLICK DETECTED on entity: {:?}", last_entity);
+                    
                     // Check all draggable cards (includes both tableau and waste cards)
                     for (entity, mut transform, card_data) in draggable_cards.iter_mut() {
                         if entity == last_entity && card_data.is_face_up {
-                            // Try foundation placement
+                            tracing::debug!("DOUBLE-CLICK: Attempting to move card {:?} (value: {}, suit: {:?}) to foundation", 
+                                           card_data.suit, card_data.value, card_data.suit);
+                            
+                            // Try foundation placement first
                             if try_move_to_foundation(entity, &mut transform, card_data, &mut foundation_piles, &mut commands) {
+                                tracing::debug!("DOUBLE-CLICK: Successfully moved card to foundation");
                                 // Reset double-click tracking
                                 *last_click_time = None;
                                 return;
+                            } else {
+                                tracing::debug!("DOUBLE-CLICK: Foundation move failed - use drag-and-drop for tableau moves");
                             }
                             
                             break; // Found the entity, no need to continue iterating
@@ -109,6 +140,14 @@ pub fn double_click_foundation_system(
     }
 }
 
-// validate_card_draggability_system removed - was causing conflicts and not needed
-
-// cleanup_flip_markers_system removed - AlreadyFlipped component was removed
+/// Comprehensive foundation validation system (disabled - no auto-move)
+pub fn foundation_validation_system(
+    _commands: Commands,
+    _foundation_piles: ResMut<FoundationPiles>,
+    _tableau_cards: Query<(Entity, &Transform, &CardData), (With<TableauPile>, With<CardFront>, Without<StockPile>)>,
+    _waste_cards: Query<(Entity, &Transform, &CardData), (With<WastePile>, With<CardFront>, Without<StockPile>)>,
+) {
+    // Foundation validation system is disabled - cards should never move automatically without user input
+    // This maintains proper solitaire gameplay where all moves are user-initiated
+    // The validation logic is available in the try_move_to_foundation function above
+}
