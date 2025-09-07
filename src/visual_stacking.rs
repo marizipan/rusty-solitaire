@@ -6,7 +6,15 @@ use crate::utils::get_card_back_image;
 pub fn update_tableau_visual_stacking_system(
     mut tableau_cards: Query<(Entity, &mut Transform, &CardData), (With<TableauPile>, Or<(With<CardFront>, With<Draggable>)>, Without<CurrentlyDragging>)>,
     selected_card: Res<SelectedCard>,
+    time: Res<Time>,
+    mut last_update: Local<f64>,
 ) {
+    // Only update visual stacking every 0.1 seconds to prevent excessive repositioning
+    let current_time = time.elapsed_secs_f64();
+    if current_time - *last_update < 0.1 {
+        return;
+    }
+    *last_update = current_time;
     // Group cards by their X position to identify stacks (only X, not Y)
     let mut stacks: std::collections::HashMap<i32, Vec<(Entity, f32, f32)>> = std::collections::HashMap::new();
     
@@ -45,12 +53,20 @@ pub fn update_tableau_visual_stacking_system(
             // Apply stacking offsets to all cards in the stack
             for (stack_index, (entity, _z_pos, _original_y)) in cards.iter().enumerate() {
                 if let Ok((_entity_id, mut transform, _card_data)) = tableau_cards.get_mut(*entity) {
+                    // Skip cards that are currently being dragged
+                    if let Some(selected) = selected_card.0 {
+                        if *entity == selected {
+                            continue;
+                        }
+                    }
+                    
                     // Apply stacking offset: each card above gets a 30-pixel Y offset
                     // This ensures each card shows enough of itself to remain clickable
                     let stacked_y = base_y - (stack_index as f32 * 30.0);
                     
-                    // Only update if the position has changed to avoid unnecessary updates
-                    if (transform.translation.y - stacked_y).abs() > 0.1 {
+                    // Only update if the position has changed significantly to avoid unnecessary updates
+                    // Use a larger threshold to prevent cards from jumping around after placement
+                    if (transform.translation.y - stacked_y).abs() > 15.0 {
                         transform.translation.y = stacked_y;
                     }
                 }
