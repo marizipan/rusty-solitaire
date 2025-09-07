@@ -2,26 +2,24 @@ mod components;
 mod utils;
 mod setup;
 mod init_setup;
-mod card_drag_sys;
-mod card_drop_sys;
+mod card_drag_drop;
 mod card_flip_sys;
 mod card_entity;
-mod foundation_auto;
-mod foundation_click;
+mod foundation_combined;
 mod stock_click;
+mod waste_click;
 mod undo;
 mod visual_stacking;
 
 use bevy::prelude::*;
 use components::*;
 use setup::setup_game;
-use card_drag_sys::*;
-use card_drop_sys::*;
+use card_drag_drop::*;
 use card_flip_sys::*;
 use card_entity::*;
-use foundation_auto::*;
-use foundation_click::*;
+use foundation_combined::*;
 use stock_click::*;
+use waste_click::*;
 use undo::*;
 use visual_stacking::*;
 
@@ -42,13 +40,19 @@ fn main() {
             (
                 // Input systems first
                 stock_click_system, // Handle stock pile cycling (deal to waste, recycle waste to stock)
-                double_click_foundation_system, // Auto-move cards to foundation piles on click
+                waste_card_click_system, // Handle waste pile card clicks
+                double_click_foundation_system, // Move cards to foundation piles on double-click
                 undo_button_system, // Handle undo button clicks
-                // Drag and drop systems
-                card_drag_system,
-                card_drop_system,
+                // Unified drag and drop system
+                card_drag_drop_system,
+            ),
+        )
+        .add_systems(
+            PostUpdate,
+            (
                 // Update systems last
                 flip_cards_system, // Handle flipping cards underneath moved cards
+                foundation_validation_system, // Foundation validation (disabled - no auto-move)
                 undo_system, // Handle undo functionality
                 update_tableau_visual_stacking_system, // Maintain visual stacking of tableau cards. Never disable this.
             ),

@@ -4,7 +4,7 @@ use crate::utils::get_card_back_image;
 
 
 pub fn update_tableau_visual_stacking_system(
-    mut tableau_cards: Query<(Entity, &mut Transform, &CardData), (With<TableauPile>, Or<(With<CardFront>, With<Draggable>)>)>,
+    mut tableau_cards: Query<(Entity, &mut Transform, &CardData), (With<TableauPile>, Or<(With<CardFront>, With<Draggable>)>, Without<CurrentlyDragging>)>,
     selected_card: Res<SelectedCard>,
 ) {
     // Group cards by their X position to identify stacks (only X, not Y)

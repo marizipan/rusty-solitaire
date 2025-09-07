@@ -9,8 +9,8 @@ pub fn auto_move_to_foundation_system(
     tableau_cards: Query<(Entity, &Transform, &CardData), (With<TableauPile>, With<CardFront>, Without<StockPile>)>,
     waste_cards: Query<(Entity, &Transform, &CardData), (With<WastePile>, With<CardFront>, Without<StockPile>)>,
 ) {
-    // Auto-move system is disabled to prevent cards from moving immediately
-    // This can be re-enabled with proper delay logic if needed
+    // Auto-move system is disabled - cards should never move automatically without user input
+    // This maintains proper solitaire gameplay where all moves are user-initiated
     return;
     
     // Check tableau cards for auto-move to foundation (excluding stock pile cards)

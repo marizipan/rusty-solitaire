@@ -188,3 +188,28 @@ pub fn is_in_waste_or_stock_area(position: Vec2) -> bool {
     // Use a generous detection radius to prevent any cards from being placed near these areas
     waste_distance < 80.0 || stock_distance < 80.0
 }
+
+pub fn can_place_on_foundation(card_data: &crate::components::CardData, foundation_pile: &Vec<(CardSuit, u8)>) -> bool {
+    if foundation_pile.is_empty() {
+        // Only Ace can start a foundation pile
+        return card_data.value == 1;
+    }
+    
+    // Get the top card of the foundation pile
+    if let Some((top_suit, top_value)) = foundation_pile.last() {
+        // Must be same suit and one higher value
+        return card_data.suit == *top_suit && card_data.value == top_value + 1;
+    }
+    
+    false
+}
+
+pub fn can_place_on_tableau_card(selected_card: &crate::components::CardData, target_card: &crate::components::CardData) -> bool {
+    // Target card must be face up
+    if !target_card.is_face_up {
+        return false;
+    }
+    
+    // Use the existing validation function from utils
+    can_place_on_tableau(selected_card.value, selected_card.suit, target_card.value, target_card.suit)
+}

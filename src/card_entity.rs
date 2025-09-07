@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy::ecs::query::Or;
 use crate::components::*;
-use crate::utils::{get_card_front_image, get_card_back_image, can_place_on_card, get_card_data_from_filename};
+use crate::utils::{get_card_front_image, get_card_back_image, get_card_data_from_filename};
 
 // Helper function to create a card entity with sprite
 pub fn create_card_entity(

@@ -46,6 +46,9 @@ pub struct SkippedWasteCard; // Marks waste cards that have been skipped and are
 pub struct UndoButton;
 
 #[derive(Component)]
+pub struct CurrentlyDragging; // Temporary component added during drag, removed on drop
+
+#[derive(Component, Clone)]
 pub struct CardData {
     pub suit: CardSuit,
     pub value: u8, // 1-13 (Ace=1, Jack=11, Queen=12, King=13)

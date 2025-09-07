@@ -1,10 +1,7 @@
 use bevy::prelude::*;
 use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
-use bevy::input::keyboard::KeyCode;
 use crate::components::*;
-use crate::utils::get_card_back_image;
-use tracing::{debug, info, warn};
 
 fn try_move_to_foundation(
     entity: Entity,
@@ -39,6 +36,9 @@ fn try_move_to_foundation(
         let foundation_x = foundation_start_x + (foundation_index as f32 * 100.0);
         let foundation_y = 260.0; // WINDOW_HEIGHT / 2.0 - 100.0
         
+        // Store original position for flip trigger
+        let original_position = transform.translation;
+        
         // Move the card to the foundation pile
         let foundation_pos = Vec3::new(foundation_x, foundation_y, foundation_pile.len() as f32 + 1.0);
         transform.translation = foundation_pos;
@@ -56,6 +56,9 @@ fn try_move_to_foundation(
             .insert(FoundationPile)
             .insert(OriginalPosition(foundation_pos));
         
+        // Trigger card flipping for face-down cards underneath
+        commands.spawn(NeedsFlipUnderneath(original_position));
+        
         true
     } else {
         false
@@ -70,6 +73,7 @@ pub fn double_click_foundation_system(
     mut draggable_cards: Query<(Entity, &mut Transform, &CardData), (With<Draggable>, Or<(With<TableauPile>, With<WastePile>)>, Without<SkippedWasteCard>)>,
     mut last_click_time: Local<Option<std::time::Instant>>,
     clicked_entity: Res<ClickedEntity>,
+    tableau_positions: Res<TableauPositions>,
 ) {
     // Handle double-click detection and auto-move to foundation
     if mouse_input.just_pressed(MouseButton::Left) {
@@ -85,17 +89,12 @@ pub fn double_click_foundation_system(
                     // Check all draggable cards (includes both tableau and waste cards)
                     for (entity, mut transform, card_data) in draggable_cards.iter_mut() {
                         if entity == last_entity && card_data.is_face_up {
-                            // First try foundation placement
+                            // Try foundation placement
                             if try_move_to_foundation(entity, &mut transform, card_data, &mut foundation_piles, &mut commands) {
                                 // Reset double-click tracking
                                 *last_click_time = None;
                                 return;
                             }
-                            
-                            // If foundation placement failed, try tableau placement
-                            // For now, skip tableau placement in double-click to avoid query conflicts
-                            // Tableau placement can be done via drag and drop
-                            debug!("Foundation placement failed, skipping tableau placement for double-click");
                             
                             break; // Found the entity, no need to continue iterating
                         }
