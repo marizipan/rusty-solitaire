@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use crate::components::*;
 use crate::utils::{is_red_suit, is_valid_stack_sequence, is_in_waste_or_stock_area};
+use tracing::debug;
 
 
 
@@ -13,7 +14,42 @@ pub fn card_drop_system(
     mut commands: Commands,
     tableau_positions: Res<TableauPositions>,
     mut foundation_piles: ResMut<FoundationPiles>,
+    mouse_input: Res<ButtonInput<MouseButton>>,
+    mut last_mouse_pos: Local<Option<Vec2>>,
 ) {
+    // Only run when a card is actually selected for dragging
+    if selected_card.0.is_none() {
+        return;
+    }
+    
+    // Only run when mouse is being dragged (held down), not on every click
+    if !mouse_input.pressed(MouseButton::Left) {
+        *last_mouse_pos = None;
+        return;
+    }
+    
+    // Check if mouse has actually moved (indicating a drag operation)
+    if let Ok(window) = window_query.single() {
+        if let Some(cursor_pos) = window.cursor_position() {
+            let current_mouse_pos = Vec2::new(cursor_pos.x, cursor_pos.y);
+            if let Some(last_pos) = *last_mouse_pos {
+                let mouse_moved = (current_mouse_pos - last_pos).length() > 5.0; // 5 pixel threshold
+                if !mouse_moved {
+                    return; // Mouse hasn't moved enough to consider it a drag
+                }
+            } else {
+                // First time mouse is pressed, store position but don't run drag logic yet
+                *last_mouse_pos = Some(current_mouse_pos);
+                return;
+            }
+            *last_mouse_pos = Some(current_mouse_pos);
+        } else {
+            return;
+        }
+    } else {
+        return;
+    }
+    
     if let Some(selected_entity) = selected_card.0 {
         let Ok(window) = window_query.single() else { return };
         
@@ -77,9 +113,9 @@ pub fn card_drop_system(
                             if other_entity != entity && other_entity != selected_entity {
                                 if let Ok(other_transform) = draggable_transform_query.get(other_entity) {
                                     let other_pos = other_transform.translation;
-                                    // Check if there's another card at the same X position but stacked above (lower Y)
+                                    // Check if there's another card at the same X position but stacked above (higher Z)
                                     let x_same = (other_pos.x - target_pos.x).abs() < 5.0;
-                                    let stacked_above = other_pos.y < target_pos.y - 25.0; // 30px offset with some tolerance
+                                    let stacked_above = other_pos.z > target_pos.z + 0.5; // Use Z position for stacking
                                     
                                     if x_same && stacked_above {
                                         // There's a card stacked above - this position is not available
@@ -107,15 +143,15 @@ pub fn card_drop_system(
                 if distance < 50.0 {
                     // DEBUG: Check if row 1 is being filtered out
                     if pile_index == 1 {
-                        println!("DEBUG: Row 1 detected at distance: {}", distance);
-                        println!("DEBUG: Row 1 position: {:?}", tableau_pos);
-                        println!("DEBUG: is_in_waste_or_stock_area: {}", is_in_waste_or_stock_area(tableau_pos.truncate()));
+                        debug!("Row 1 detected at distance: {}", distance);
+                        debug!("Row 1 position: {:?}", tableau_pos);
+                        debug!("is_in_waste_or_stock_area: {}", is_in_waste_or_stock_area(tableau_pos.truncate()));
                     }
                     
                     // CRITICAL: Ensure we're not placing on waste or stock pile areas
                     if is_in_waste_or_stock_area(tableau_pos.truncate()) {
                         if pile_index == 1 {
-                            println!("DEBUG: Row 1 filtered out by waste/stock area check!");
+                            debug!("Row 1 filtered out by waste/stock area check!");
                         }
                         continue;
                     }
@@ -138,8 +174,8 @@ pub fn card_drop_system(
                     
                     // DEBUG: More info about row 1
                     if pile_index == 1 {
-                        println!("DEBUG: Row 1 pile_has_cards: {}", pile_has_cards);
-                        println!("DEBUG: Row 1 added to tableau_pile_info: {:?}", (*tableau_pos, !pile_has_cards));
+                        debug!("Row 1 pile_has_cards: {}", pile_has_cards);
+                        debug!("Row 1 added to tableau_pile_info: {:?}", (*tableau_pos, !pile_has_cards));
                     }
                     break;
                 }
@@ -147,6 +183,7 @@ pub fn card_drop_system(
             
             // First, get the selected card data and store what we need
             let (selected_value, selected_suit) = if let Ok(card_data) = card_data_query.get(selected_entity) {
+                debug!("Selected card - value: {}, suit: {:?}", card_data.value, card_data.suit);
                 (card_data.value, card_data.suit)
             } else {
                 return; // Can't get selected card data, exit early
@@ -176,30 +213,27 @@ pub fn card_drop_system(
                                 let x_same = (card_transform.translation.x - original_position.x).abs() < x_tolerance;
                                 
                                 // A card is part of the stack if it's at the same X position AND directly stacked above
-                                // In Solitaire: cards are stacked with 30px Y offsets, bottom card has highest Y, cards above have lower Y
-                                // We need to check if this card is positioned exactly where a stacked card should be
-                                let y_difference = original_position.y - card_transform.translation.y;
+                                // Use Z position for stacking detection since visual stacking affects Y but Z represents logical order
+                                let z_difference = card_transform.translation.z - original_position.z;
                                 
-                                // Check if this card is positioned at a valid stack offset (multiple of 30px)
+                                // Check if this card is positioned above the selected card (higher Z)
                                 // and is within a reasonable stack height (max 10 cards)
-                                let stack_offset = (y_difference / 30.0).round();
-                                let is_valid_stack_offset = stack_offset > 0.0 && stack_offset <= 10.0;
-                                let is_exact_stack_position = (y_difference - (stack_offset * 30.0)).abs() < 10.0; // More tolerance
+                                let is_above = z_difference > 0.5; // Small tolerance for Z position
+                                let is_within_stack_height = z_difference <= 10.0; // Max 10 cards in stack
                                 
-                                let is_part_of_stack = x_same && is_valid_stack_offset && is_exact_stack_position;
+                                let is_part_of_stack = x_same && is_above && is_within_stack_height;
                                 
                                 
                                 if is_part_of_stack {
                                     // CRITICAL: Only include face-up cards in the stack
                                     if card_data.is_face_up {
-                                        // Calculate the relative position in the stack based on Y offset
-                                        // In Solitaire stacking: bottom card has highest Y, cards above have lower Y
-                                        // Each card is offset by 30px, so calculate stack index from Y difference
-                                        let y_difference = original_position.y - card_transform.translation.y;
-                                        let stack_index = (y_difference / 30.0).round() as u32;
+                                        // Calculate the relative position in the stack based on Z position
+                                        // Cards above have higher Z values, so calculate stack index from Z difference
+                                        let z_difference = card_transform.translation.z - original_position.z;
+                                        let stack_index = z_difference.round() as u32;
                                         
                                         // Include cards that are above the selected card (positive stack index)
-                                        // Since cards above have lower Y values, y_difference will be positive
+                                        // Since cards above have higher Z values, z_difference will be positive
                                         if stack_index > 0 {
                                             cards_to_move.push((card_entity, stack_index));
                                             stack_cards.push((card_data.suit, card_data.value));
@@ -357,8 +391,8 @@ pub fn card_drop_system(
             // Check tableau targets only if we haven't found a foundation pile target
             if best_target.is_none() {
                 // DEBUG: Check what tableau pile info we have
-                println!("DEBUG: tableau_pile_info: {:?}", tableau_pile_info);
-                println!("DEBUG: selected_value: {}", selected_value);
+                debug!("tableau_pile_info: {:?}", tableau_pile_info);
+                debug!("selected_value: {}", selected_value);
                 
                 // PRIORITY: Check empty tableau piles first for Kings
                 // This ensures Kings go to empty piles instead of being placed on existing cards
@@ -367,7 +401,7 @@ pub fn card_drop_system(
                         let distance = (cursor_world_pos - tableau_pos.truncate()).length();
                         if distance < 50.0 { // Within reasonable distance
                             target_tableau_pos = Some(*tableau_pos);
-                            println!("DEBUG: Found empty tableau pile for King at distance: {}", distance);
+                            debug!("Found empty tableau pile for King at distance: {}", distance);
                             break;
                         }
                     }
@@ -378,23 +412,31 @@ pub fn card_drop_system(
                     best_target = Some((target_tableau_pos.unwrap(), 0.0, "empty_tableau"));
                 } else {
                     // DEBUG: Check what potential targets we have
-                    println!("DEBUG: potential_targets: {:?}", potential_targets);
+                    debug!("potential_targets: {:?}", potential_targets);
                     
                     // No empty tableau pile available, check existing tableau cards
                     for (target_pos, distance, target_value, target_suit) in &potential_targets {
                         // DEBUG: Check each potential target
-                        println!("DEBUG: Checking target at {:?}, distance: {}, target_value: {}, selected_value: {}", 
+                        debug!("Checking target at {:?}, distance: {}, target_value: {}, selected_value: {}", 
                                 target_pos, distance, target_value, selected_value);
                         
                         // VALIDATION: The selected card must be one value lower than the target
                         // In Solitaire: place a 5 on a 6, place a 4 on a 5, etc.
+                        debug!("Value validation: selected_value={}, target_value={}, target_value-1={}, match={}", 
+                               selected_value, target_value, target_value - 1, selected_value == target_value - 1);
                         if selected_value != target_value - 1 {
-                            println!("DEBUG: Skipping target - value mismatch: {} != {} - 1", selected_value, target_value);
+                            debug!("Skipping target - value mismatch: {} != {} - 1", selected_value, target_value);
                             continue; // Skip invalid tableau placements
                         }
+                        debug!("Value validation PASSED for target at {:?}", target_pos);
                         
                         // Check if colors alternate (red on black, black on red)
-                        if is_red_suit(selected_suit) == is_red_suit(*target_suit) {
+                        let selected_is_red = is_red_suit(selected_suit);
+                        let target_is_red = is_red_suit(*target_suit);
+                        debug!("Color check - selected_suit: {:?} (red: {}), target_suit: {:?} (red: {})", 
+                                selected_suit, selected_is_red, target_suit, target_is_red);
+                        if selected_is_red == target_is_red {
+                            debug!("Skipping target - same color: {} == {}", selected_is_red, target_is_red);
                             continue; // Colors are the same - this placement is invalid
                         }
                         

@@ -319,6 +319,7 @@ name = "barn"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "tracing",
 ]
 
 [[package]]

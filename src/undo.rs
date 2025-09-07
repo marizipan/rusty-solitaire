@@ -4,6 +4,7 @@ use bevy::input::mouse::MouseButton;
 use bevy::input::keyboard::KeyCode;
 use crate::components::*;
 use crate::utils::get_card_back_image;
+use tracing::debug;
 
 /// Handles undo button clicks and executes undo actions
 pub fn undo_button_system(
@@ -38,6 +39,7 @@ pub fn undo_button_system(
             if distance < 60.0 { // Within button bounds (increased for better usability)
                 // Proper undo: restore card to previous state
                 if let Some(undo_action) = undo_stack.0.pop() {
+                    debug!("Executing undo action for entity: {:?}", undo_action.card_entity);
                     
                     // CRITICAL FIX: Check if the entity still exists before trying to modify it
                     // This prevents crashes when entities have been despawned and recreated

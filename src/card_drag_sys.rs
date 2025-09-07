@@ -3,6 +3,7 @@ use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
 use crate::components::*;
 use crate::utils::{is_red_suit, is_valid_stack_sequence};
+use tracing::debug;
 
 
 
@@ -51,10 +52,11 @@ pub fn card_drag_system(
                                 if other_entity != entity {
                                     if let Ok(other_transform) = transform_query.get(other_entity) {
                                         let x_same = (other_transform.translation.x - current_pos.x).abs() < 15.0;
-                                        let y_same = (other_transform.translation.y - current_pos.y).abs() < 35.0;
+                                        // Use Z position for stacking detection instead of Y position
+                                        // Visual stacking affects Y but Z represents the actual stacking order
                                         let z_higher = other_transform.translation.z > current_pos.z + 0.5;
                                         
-                                        if x_same && y_same && z_higher {
+                                        if x_same && z_higher {
                                             is_top_card = false;
                                             break;
                                         }
@@ -82,10 +84,11 @@ pub fn card_drag_system(
                                     if other_entity != entity {
                                         if let Ok(other_transform) = transform_query.get(other_entity) {
                                             let x_same = (other_transform.translation.x - current_pos.x).abs() < 15.0;
-                                            let y_same = (other_transform.translation.y - current_pos.y).abs() < 35.0;
+                                            // Use Z position for stacking detection instead of Y position
+                                            // Visual stacking affects Y but Z represents the actual stacking order
                                             let z_higher = other_transform.translation.z > current_pos.z + 0.5;
                                             
-                                            if x_same && y_same && z_higher {
+                                            if x_same && z_higher {
                                                 if let Ok(other_card_data) = card_data_query.get(other_entity) {
                                                     cards_above.push((other_card_data.suit, other_card_data.value));
                                                     stack_entities.push(other_entity);
@@ -126,10 +129,11 @@ pub fn card_drag_system(
                                     if other_entity != entity {
                                         if let Ok(other_transform) = transform_query.get(other_entity) {
                                             let x_same = (other_transform.translation.x - current_pos.x).abs() < 15.0;
-                                            let y_same = (other_transform.translation.y - current_pos.y).abs() < 35.0;
+                                            // Use Z position for stacking detection instead of Y position
+                                            // Visual stacking affects Y but Z represents the actual stacking order
                                             let z_lower = other_transform.translation.z < current_pos.z - 0.5;
                                             
-                                            if x_same && y_same && z_lower {
+                                            if x_same && z_lower {
                                                 if let Ok(other_card_data) = card_data_query.get(other_entity) {
                                                     if !other_card_data.is_face_up {
                                                         has_face_down_underneath = true;
@@ -152,6 +156,8 @@ pub fn card_drag_system(
                             *last_click_time = Some(now);
                             clicked_entity.0 = Some(entity);
                             selected_card.0 = Some(entity);
+                            debug!("Card selected for dragging - entity: {:?}, value: {}, suit: {:?}", 
+                                   entity, card_data.value, card_data.suit);
                             break;
                         }
                     }

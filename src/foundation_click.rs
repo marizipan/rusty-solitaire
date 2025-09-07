@@ -4,6 +4,7 @@ use bevy::input::mouse::MouseButton;
 use bevy::input::keyboard::KeyCode;
 use crate::components::*;
 use crate::utils::get_card_back_image;
+use tracing::{debug, info, warn};
 
 fn try_move_to_foundation(
     entity: Entity,
@@ -62,10 +63,6 @@ fn try_move_to_foundation(
 }
 
 
-
-
-
-
 pub fn double_click_foundation_system(
     mut commands: Commands,
     mouse_input: Res<ButtonInput<MouseButton>>,
@@ -88,11 +85,18 @@ pub fn double_click_foundation_system(
                     // Check all draggable cards (includes both tableau and waste cards)
                     for (entity, mut transform, card_data) in draggable_cards.iter_mut() {
                         if entity == last_entity && card_data.is_face_up {
+                            // First try foundation placement
                             if try_move_to_foundation(entity, &mut transform, card_data, &mut foundation_piles, &mut commands) {
                                 // Reset double-click tracking
                                 *last_click_time = None;
                                 return;
                             }
+                            
+                            // If foundation placement failed, try tableau placement
+                            // For now, skip tableau placement in double-click to avoid query conflicts
+                            // Tableau placement can be done via drag and drop
+                            debug!("Foundation placement failed, skipping tableau placement for double-click");
+                            
                             break; // Found the entity, no need to continue iterating
                         }
                     }
@@ -109,4 +113,3 @@ pub fn double_click_foundation_system(
 // validate_card_draggability_system removed - was causing conflicts and not needed
 
 // cleanup_flip_markers_system removed - AlreadyFlipped component was removed
-

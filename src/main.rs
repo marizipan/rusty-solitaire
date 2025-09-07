@@ -11,7 +11,6 @@ mod foundation_click;
 mod stock_click;
 mod undo;
 mod visual_stacking;
-mod waste_click;
 
 use bevy::prelude::*;
 use components::*;
@@ -25,7 +24,6 @@ use foundation_click::*;
 use stock_click::*;
 use undo::*;
 use visual_stacking::*;
-use waste_click::*;
 
 fn main() {
     App::new()
@@ -43,8 +41,7 @@ fn main() {
             Update,
             (
                 // Input systems first
-                stock_click_system,
-                waste_card_click_system, // User-initiated waste card placement
+                stock_click_system, // Handle stock pile cycling (deal to waste, recycle waste to stock)
                 double_click_foundation_system, // Auto-move cards to foundation piles on click
                 undo_button_system, // Handle undo button clicks
                 // Drag and drop systems
